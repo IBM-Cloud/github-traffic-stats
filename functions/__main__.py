@@ -87,20 +87,27 @@ def main(args):
                 repo=ibm_db.fetch_assoc(reposStmt)
                 while repo != False:
                     # fetch view and clone traffic
-                    viewStats=gh.repos(repo["USERNAME"], repo["RNAME"]).traffic.views.get()
-                    cloneStats=gh.repos(repo["USERNAME"], repo["RNAME"]).traffic.clones.get()
-                    if viewStats['views']:
-                        mergeViewData(viewStats,repo["RID"])
-                    if cloneStats['clones']:
-                        mergeCloneData(cloneStats,repo["RID"])
-                    userRepoCount=userRepoCount+1
-                    # For debugging:
-                    # print repo["USERNAME"]+" "+ repo["RNAME"]
+                    try:
+                        viewStats=gh.repos(repo["USERNAME"], repo["RNAME"]).traffic.views.get()
+                        cloneStats=gh.repos(repo["USERNAME"], repo["RNAME"]).traffic.clones.get()
+                        if viewStats['views']:
+                            mergeViewData(viewStats,repo["RID"])
+                        if cloneStats['clones']:
+                            mergeCloneData(cloneStats,repo["RID"])
+                        userRepoCount=userRepoCount+1
+                        # For debugging:
+                        # print repo["USERNAME"]+" "+ repo["RNAME"]
 
-                    # update global repo counter
-                    repoCount=repoCount+1
-                    # fetch next repository
-                    repo=ibm_db.fetch_assoc(reposStmt)
+                        # update global repo counter
+                        repoCount=repoCount+1
+                        # fetch next repository
+                        repo=ibm_db.fetch_assoc(reposStmt)
+                    except:
+                        # update global repo counter
+                        repoCount=repoCount+1
+                        # fetch next repository
+                        repo=ibm_db.fetch_assoc(reposStmt)
+                        
             # insert log entry
             ts = time.gmtime()
             res=ibm_db.execute(logStmt,(sysuser["UID"],time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,'cloudfunction'))
