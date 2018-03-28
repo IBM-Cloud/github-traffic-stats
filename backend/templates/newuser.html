@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+{% block body %}
+<div id="main" class="container">
+
+<h3 class="title is-3">Add new user</h3>
+
+
+<form action="" name="newrepo">
+<div class="field">
+  <label class="label">Name</label>
+  <div class="control">
+    <input class="input" type="text" placeholder="User name">
+  </div>
+</div>
+
+<div class="field">
+  <label class="label">User ID</label>
+  <div class="control">
+    <input class="input" type="text" placeholder="Text input" value="userid">
+  </div>
+</div>
+
+<div class="field">
+  <label class="label">Email</label>
+  <div class="control has-icons-left has-icons-right">
+    <input class="input" type="email" placeholder="Email input" value="email@example.com">
+    <span class="icon is-small is-left">
+      <i class="fas fa-envelope"></i>
+    </span>
+  </div>
+</div>
+
+<div class="field">
+  <label class="label">Github access token</label>
+  <div class="control">
+    <input class="input" type="text" placeholder="Text input" value="ghtoken">
+  </div>
+</div>
+
+<div class="field is-grouped">
+  <div class="control">
+    <button class="button is-link">Submit</button>
+  </div>
+  <div class="control">
+    <button class="button is-text">Cancel</button>
+  </div>
+</div>
+</form>
+</div>
+{% endblock %}
