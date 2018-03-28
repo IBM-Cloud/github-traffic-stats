@@ -1,0 +1,27 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+		 {% block title %}{% endblock %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.6.2/css/bulma.min.css">
+		{% block extra_stylesheets %} {% endblock %}
+  </head>
+
+  <body>
+    <script defer src="https://use.fontawesome.com/releases/v5.0.6/js/all.js"></script>
+
+		<section class="section">
+		<div class="container">
+			{% block body %}{% endblock %}
+		</div>
+</section>
+			<hr>
+			<footer class="footer">
+						<p><a href="http://www.ibm.com/cloud/">IBM Cloud</a></p>
+
+			</footer>
+
+		{% block extra_javascripts %} {% endblock %}
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{ "provider":
+ {
+    "issuer": "appid-oauth.ng.bluemix.net",
+    "authorization_endpoint": "https://appid-oauth.ng.bluemix.net/oauth/v3/tenantID/authorization",
+    "token_endpoint": "https://appid-oauth.ng.bluemix.net/oauth/v3/tenantID/token",
+    "userinfo_endpoint": "https://appid-profiles.ng.bluemix.net/api/v1/attributes",
+    "jwks_uri": "https://appid-oauth.ng.bluemix.net/oauth/v3/tenantID/publickeys"
+},
+"client": {
+    "client_id": "yourClientID",
+    "client_secret": "youClientSecret"
+}
+}

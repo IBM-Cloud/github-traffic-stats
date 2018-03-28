@@ -1,0 +1,77 @@
+{% extends "layout.html" %}
+{% block title %}
+<title>Repositories - Your repos</title>
+{% endblock %}
+
+
+{% block body %}
+<script type="text/javascript">
+  function addRepo() {
+    var xhttp;
+    var orgname = document.forms['newrepo'].elements['orgname'].value;
+    var reponame = document.forms['newrepo'].elements['reponame'].value;
+    xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function () {
+      if (xhttp.readyState == XMLHttpRequest.DONE) {
+        var response = JSON.parse(xhttp.responseText);
+        document.getElementById("messageResult").style.display = "block";
+        document.getElementById("plogmessage").innerHTML = "Logged message: " + response.message;
+        var table = document.getElementById("repolist");
+        var row = table.insertRow(-1);
+        var cell1 = row.insertCell(0);
+        var cell2 = row.insertCell(1);
+        cell1.innerHTML = orgname;
+        cell2.innerHTML = reponame;
+        document.getElementById("orgname").value = '';
+        document.getElementById("reponame").value = '';
+      }
+    };
+    xhttp.open('POST', "/repos/newrepo");
+    xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    var postVars = 'orgname=' + orgname + '&reponame=' + reponame;
+    xhttp.send(postVars);
+    return false;
+  }
+</script>
+
+
+<div id="main" class="container">
+    <h2 class="title is-2">Your Repositories</h2>
+    <table id="repolist" class="table table-bordered table-hover dt-responsive" summary="List of your repositories">
+      <tr>
+        <th>Organisation
+        <th>Repository
+      {%- for repo in repos %}
+      <tr>
+        <td>{{ repo.orgname }}
+        <td>{{ repo.reponame }}
+      {%- endfor %}
+    </table>
+
+    <p>
+
+  <form action="" name="newrepo">
+    <div class="field">
+      <label class="label">Add repository</label>
+      <div class="control">
+        <input class="input" type="text" name="orgname" id="orgname" placeholder="organisation">
+        <input class="input" type="text" name="reponame" id="reponame" placeholder="repository">
+      </div>
+    </div>
+
+
+    <div class="field">
+      <div class="control">
+        <input type="submit" class="button  is-link" type="submit" onclick="return addRepo()" value="Add repository">
+      </div>
+    </div>
+  </form>
+
+
+</p>
+<div id ="messageResult" style="display:none;">
+  <hr>
+  <pre id="plogmessage"></pre>
+</div>
+</div>
+{% endblock %}

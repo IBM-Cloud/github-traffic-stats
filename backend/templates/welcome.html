@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block title %}
+<title>Github Traffic Analytics</title>
+{% endblock %}
+
+
+{% block body %}
+<div id="main" class="container">
+    <h2 class="title is-2">Github Traffic Analytics - Welcome</h2>
+    Welcome, {{ id['name'] }}. I have the following information: <br>
+    Email is {{ id['email'] }}. Your role (numeric) is {{ role }}.
+
+    {% if role is odd %}
+    <p>admin</p>
+    {% endif %}
+    {% if role is divisibleby(2) %}
+    <p>sysmaint</p>
+    {% endif %}
+    {% if role is divisibleby(2) %}
+    <p>sysmaint</p>
+    {% endif %}
+</div>
+{% endblock %}

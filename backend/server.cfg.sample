@@ -1,0 +1,6 @@
+# Sample configuration file - adapt to your needs
+SQLALCHEMY_DATABASE_URI = "db2 or other database URI"
+SQLALCHEMY_ECHO = False
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+# Set DEBUG to True if you need detailed error messages
+DEBUG = False
