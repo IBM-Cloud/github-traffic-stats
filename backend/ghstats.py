@@ -124,11 +124,49 @@ def index():
 
 @app.route('/admin/initialize-app')
 def initializeApp():
-    dbstatements=None
+    return render_template('initializeapp.html')
+
+@app.route('/admin/initialize-app')
+@auth.oidc_auth
+def firststep():
+    return render_template('firststep.html')
+
+
+@app.route('/admin/secondstep', methods=['POST'])
+@auth.oidc_auth
+def secondstep():
+    print "hello"
+    print flask.session['id_token']['email']
+    username=request.form['username']
+    ghuser=request.form['ghuser']
+    ghtoken=request.form['ghtoken']
+    dbstmtstring=None
     with open('database.sql') as dbfile:
-        dbstatements=dbfile.read()
+        dbstmtstring=dbfile.read()
         dbfile.close()
-    return dbstatements
+    dbstatements=dbstmtstring.replace('\n', ' ').split('@@')
+    # connection = db.engine.connect()
+    # trans = connection.begin()
+    # try:
+    #     for stmt in dbstatements:
+    #         connection.execute(stmt)
+    #connection.execute("insert into adminusers (aid, auser, email) values(?,?,?)", 100, username, flask.session['id_token']['email'])
+    #connection.execute("insert into users (uid, ghuser, ghtoken) values(?,?,?)", 100, ghuser, ghtoken)
+    #connection.execute("insert into adminroles (aid, role) values(?,?)", 100, 5)
+    # Adminuser has tentant role for the tenant (user)
+    #connection.execute("insert into adminuserreporoles (aid, uid, role) values(?,?,?)", 100, 100, 4)
+    #     trans.commit()
+    # except:
+    #     trans.rollback()
+    #     raise
+    return jsonify(stmts=dbstatements)
+
+@app.route('/repos/dashboard')
+@auth.oidc_auth
+def dashboard():
+    return render_template('dashboard.html')
+
+
 
 @app.route('/login')
 @auth.oidc_auth
@@ -178,7 +216,6 @@ def listrepos():
 @app.route('/repos/newrepo', methods=['POST'])
 @auth.oidc_auth
 def newrepo():
-    print "testme"
     if isTenant():
         # Access form data from app
         orgname=request.form['orgname']
@@ -248,7 +285,7 @@ def datatest2():
 def datatest3():
     return jsonify(json_list=[i.serialize for i in Repo.query.all()])
 
-@app.route('/repo/stats')
+@app.route('/repos/stats')
 @auth.oidc_auth
 def repostatistics():
     result = db.engine.execute("select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques from repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])

@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block title %}
+<title>First step</title>
+{% endblock %}
+{% block body %}
+
+<div id="main" class="container">
+    <h2 class="title is-2">First step</h2>
+<p>
+  Initialize the application and its database.
+
+  Gather information on the Github user, its access token.
+
+  <form action="/admin/secondstep" name="newuser" method="post">
+    <div class="field">
+      <label class="label">Name</label>
+      <div class="control">
+        <input class="input" type="text" placeholder="User name" name="username">
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">Github Username</label>
+      <div class="control">
+        <input class="input" type="text" placeholder="username"  name="ghuser">
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">Github access token</label>
+      <div class="control">
+        <input class="input" type="password" placeholder="token" name="ghtoken">
+      </div>
+    </div>
+
+    <div class="field is-grouped">
+      <div class="control">
+        <input type="submit" class="button is-link" type="submit" value="Initialize">
+      </div>
+      <div class="control">
+        <button class="button is-text">Cancel</button>
+      </div>
+    </div>
+  </form>
+
+</p>
+</div>
+{% endblock %}

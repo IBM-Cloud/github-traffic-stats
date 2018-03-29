@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block title %}
+<title>Initialize App</title>
+{% endblock %}
+{% block body %}
+
+
+<div id="main" class="container">
+    <h2 class="title is-2">Initialize Github Traffic App</h2>
+<div class="content">
+<p>
+  Using this page and the following dialog, you can initialize the application and its database.
+  Before you can access the next page, you will need to sign into (login) to the app. The userid that
+  you use during that process will be configured as system administrator.
+
+  Before you begin, make sure you have the following ready:
+</p>
+  <ul>
+    <li>your Github username</li>
+    <li><a href="https://github.com/settings/tokens">Github access token</a></li>
+  </ul>
+
+  <a href="/admin/firststep" class="button">Start initialization</a>
+</div>
+</div>
+{% endblock %}
