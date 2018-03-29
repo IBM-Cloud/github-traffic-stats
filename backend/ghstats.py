@@ -10,8 +10,6 @@ from sqlalchemy.orm import relationship, backref
 from flask_sqlalchemy import SQLAlchemy
 
 
-#PORT = 5000
-
 app = Flask(__name__)
 
 if 'VCAP_SERVICES' in os.environ:
@@ -118,7 +116,19 @@ def index():
     return render_template('index.html')
 
 
+# have "unprotected" page with instructions
+# from there go to protected page, grab email and other info
+# to populate db after creating the SQLALCHEMY_DATABASE_URI
 
+# could split string by semicolon and execute each stmt individually
+
+@app.route('/admin/initialize-app')
+def initializeApp():
+    dbstatements=None
+    with open('database.sql') as dbfile:
+        dbstatements=dbfile.read()
+        dbfile.close()
+    return dbstatements
 
 @app.route('/login')
 @auth.oidc_auth
@@ -238,16 +248,17 @@ def datatest2():
 def datatest3():
     return jsonify(json_list=[i.serialize for i in Repo.query.all()])
 
-@app.route('/datatest4')
+@app.route('/repo/stats')
 @auth.oidc_auth
-def datatest4():
-    result = db.engine.execute("select username, rname, r.rid, tdate, viewcount, vuniques, clonecount, cuniques from repotraffic rt, ghusers gu, repos r where r.ownerid=gu.uid and rt.rid=r.rid order by tdate desc, 3 asc")
-    return render_template('data4.html',items=result)
+def repostatistics():
+    result = db.engine.execute("select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques from repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
+    #result = db.engine.execute("select username, rname, r.rid, tdate, viewcount, vuniques, clonecount, cuniques from repotraffic rt, ghusers gu, repos r where r.ownerid=gu.uid and rt.rid=r.rid order by tdate desc, 3 asc")
+    return render_template('repostats.html',stats=result)
 
 @app.route('/datatest5')
 @auth.oidc_auth
 def datatest5():
-    result = db.engine.execute("select r.rid,r.orgname,r.tdate,r.viewcount from repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
+    result = db.engine.execute("select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount from repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
     return json.dumps([dict(r) for r in result],default=alchemyencoder)
 
 
