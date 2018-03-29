@@ -15,7 +15,7 @@
       if (xhttp.readyState == XMLHttpRequest.DONE) {
         var response = JSON.parse(xhttp.responseText);
         document.getElementById("messageResult").style.display = "block";
-        document.getElementById("plogmessage").innerHTML = "Logged message: " + response.message;
+        document.getElementById("plogmessage").innerHTML = "Message: " + response.message;
         var table = document.getElementById("repolist");
         var row = table.insertRow(-1);
         var cell1 = row.insertCell(0);
