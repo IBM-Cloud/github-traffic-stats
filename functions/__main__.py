@@ -60,6 +60,9 @@ def mergeCloneData(cloneStats, rid):
 def main(args):
     global conn
     repoCount=0
+    processedRepos=0
+    logtext="cloudfunction ()"
+    errortext=None
 
     ssldsn = args["__bx_creds"]["dashDB"]["ssldsn"]
     #ssldsn = args["ssldsn"]
@@ -86,6 +89,7 @@ def main(args):
             if (ibm_db.execute(reposStmt,(sysuser["UID"],))):
                 repo=ibm_db.fetch_assoc(reposStmt)
                 while repo != False:
+                    repoCount=repoCount+1
                     # fetch view and clone traffic
                     try:
                         viewStats=gh.repos(repo["USERNAME"], repo["RNAME"]).traffic.views.get()
@@ -99,18 +103,19 @@ def main(args):
                         # print repo["USERNAME"]+" "+ repo["RNAME"]
 
                         # update global repo counter
-                        repoCount=repoCount+1
+                        processedRepos=processedRepos+1
                         # fetch next repository
                         repo=ibm_db.fetch_assoc(reposStmt)
                     except:
-                        # update global repo counter
-                        repoCount=repoCount+1
+                        errortext=errortext+str(repo["RID"])+" "
                         # fetch next repository
                         repo=ibm_db.fetch_assoc(reposStmt)
-                        
             # insert log entry
             ts = time.gmtime()
-            res=ibm_db.execute(logStmt,(sysuser["UID"],time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,'cloudfunction'))
+            logtext=logtext+str(processedRepos)+"/"+str(repoCount)+")"
+            if errortext:
+                logtext=logtext+", repo errors: "+errortext
+            res=ibm_db.execute(logStmt,(sysuser["UID"],time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,logtext))
             # fetch next system user
             sysuser=ibm_db.fetch_assoc(allUsers)
     return {"repoCount": repoCount}
