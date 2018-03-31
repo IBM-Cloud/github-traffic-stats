@@ -262,9 +262,39 @@ def newrepo():
         # need to check if org exists
         # need to insert userrepos: uid, rid
 
-        return jsonify(message="Your new repo ID: "+str(rid))
+        return jsonify(message="Your new repo ID: "+str(rid), repoid=rid)
     else:
         return jsonify(message="Error: no repository added") # should go to error or info page
+
+@app.route('/repos/deleterepo', methods=['POST'])
+@auth.oidc_auth
+def deleterepo():
+    if isTenant():
+        # Access form data from app
+        repoid=request.form['repoid']
+        # Log to stdout stream
+        print repoid
+
+        # could check if repo exists
+        # but skipping to reduce complexity
+
+        # delete from repos, tenantrepos and every row in adminuserreporoles
+
+        connection = db.engine.connect()
+        trans = connection.begin()
+        try:
+            result = connection.execute("delete from repos where rid=?",repoid)
+            result = connection.execute("delete from userrepos where rid=?",repoid)
+            result = connection.execute("delete from adminuserreporoles where rid=?",repoid)
+
+            trans.commit()
+        except:
+            trans.rollback()
+            raise
+        return jsonify(message="Deleted repository: "+str(repoid), repoid=repoid)
+    else:
+        return jsonify(message="Error: no repository deleted") # should go to error or info page
+
 
 
 

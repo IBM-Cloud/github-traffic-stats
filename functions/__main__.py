@@ -62,7 +62,7 @@ def main(args):
     repoCount=0
     processedRepos=0
     logtext="cloudfunction ()"
-    errortext=None
+    errortext=""
 
     ssldsn = args["__bx_creds"]["dashDB"]["ssldsn"]
     #ssldsn = args["ssldsn"]
@@ -113,7 +113,7 @@ def main(args):
             # insert log entry
             ts = time.gmtime()
             logtext=logtext+str(processedRepos)+"/"+str(repoCount)+")"
-            if errortext:
+            if errortext !="":
                 logtext=logtext+", repo errors: "+errortext
             res=ibm_db.execute(logStmt,(sysuser["UID"],time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,logtext))
             # fetch next system user
