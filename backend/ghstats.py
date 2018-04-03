@@ -1,4 +1,4 @@
-import flask, os, json, datetime
+import flask, os, json, datetime, re
 import github
 from flask import Flask, jsonify,redirect,request,render_template, url_for, Response, stream_with_context
 
@@ -44,8 +44,8 @@ db = SQLAlchemy(app, session_options={'autocommit': True})
 
 
 class User(db.Model):
-    __tablename__ = 'users'
-    uid = Column(Integer, primary_key=True)
+    __tablename__ = 'tenants'
+    tid = Column(Integer, primary_key=True)
     fname = Column(String)
     lname = Column(String)
     email = Column(String)
@@ -57,7 +57,7 @@ class Repo(db.Model):
     rid = Column(Integer, primary_key=True)
     rname = Column(String)
     ghserverid = Column(Integer)
-    ownerid = Column(Integer)
+    oid = Column(Integer)
     schedule = Column(Integer)
 
     @property
@@ -65,7 +65,7 @@ class Repo(db.Model):
         return {
            'id'         : self.rid,
            'rname'      : self.rname,
-           'ownerid'    : self.ownerid
+           'oid'    : self.oid
            }
 
 class AdminUser(db.Model):
@@ -111,6 +111,7 @@ def isTenantViewer():
     return bool(flask.session['userrole'] & 8)
 
 
+# Index page, unprotected to display some general information
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -126,12 +127,17 @@ def index():
 def initializeApp():
     return render_template('initializeapp.html')
 
-@app.route('/admin/initialize-app')
+# Show page for entering user information for first system user and tenant
+@app.route('/admin/firststep')
 @auth.oidc_auth
 def firststep():
     return render_template('firststep.html')
 
 
+# Read the database schema file, create tables and then insert the data
+# for the first system user. That user becomes system administrator and
+# tenant.
+# Called from firststep
 @app.route('/admin/secondstep', methods=['POST'])
 @auth.oidc_auth
 def secondstep():
@@ -141,10 +147,13 @@ def secondstep():
     ghuser=request.form['ghuser']
     ghtoken=request.form['ghtoken']
     dbstmtstring=None
-    with open('database.sql') as dbfile:
-        dbstmtstring=dbfile.read()
-        dbfile.close()
-    dbstatements=dbstmtstring.replace('\n', ' ').split('@@')
+    lines = open('database.sql', 'r')  # read the file line by line into array
+    sqlcode = ''
+    for line in lines:
+        sqlcode += re.sub(r'--.*', '', line.rstrip() )  # remove the in-line comments
+
+    dbstatements = sqlcode.split(';') # split the text into commands
+
     # connection = db.engine.connect()
     # trans = connection.begin()
     # try:
@@ -198,7 +207,7 @@ def newuser():
 @auth.oidc_auth
 def systemlog():
     if isSysMaintainer() or isAdministrator():
-        result = db.engine.execute("select uid, completed, numrepos, state from systemlog where completed >(current date - 21 days) order by completed desc, uid asc")
+        result = db.engine.execute("select tid, completed, numrepos, state from systemlog where completed >(current date - 21 days) order by completed desc, tid asc")
         return render_template('systemlog.html',logs=result)
     else:
         return "no logs" # should go to error or info page
@@ -234,26 +243,27 @@ def newrepo():
             rid=None
             orgid=None
             ghstmt="""select aurr.uid, au.aid,u.ghuser,u.ghtoken
-                      from  adminuserreporoles aurr, adminusers au, adminroles ar, users u where ar.aid=au.aid
-                      and aurr.aid=au.aid
-                      and u.uid=aurr.uid
+                      from  admintenantreporoles atrr, adminusers au, adminroles ar, tenants t
+                      where ar.aid=au.aid
+                      and atrr.aid=au.aid
+                      and t.tid=atrr.tid
                       and bitand(aurr.role,4)>0
-                      and au.email=?"""
+                      and au.email=?   """
             githubinfo = connection.execute(ghstmt,flask.session['id_token']['email'])
             for row in githubinfo:
-                uid=row['uid']
+                tid=row['tid']
                 aid=row['aid']
-            orgidinfo = connection.execute("select uid from ghusers where username=?",orgname)
+            orgidinfo = connection.execute("select tid from ghorgusers where username=?",orgname)
             for row in orgidinfo:
-                orgid=row['uid']
+                orgid=row['oid']
             if orgid is None:
-                neworgidinfo = connection.execute("select uid from new table (insert into ghusers(username) values(?))",orgname)
+                neworgidinfo = connection.execute("select oid from new table (insert into ghorgusers(username) values(?))",orgname)
                 for row in neworgidinfo:
-                        orgid=row['uid']
-            repoid = connection.execute("select rid from new table (insert into repos(rname,ghserverid,ownerid,schedule) values(?,?,?,?))",reponame,1,orgid,0)
+                        orgid=row['oid']
+            repoid = connection.execute("select rid from new table (insert into repos(rname,ghserverid,oid,schedule) values(?,?,?,?))",reponame,1,orgid,0)
             for row in repoid:
                 rid=row['rid']
-            repoid = connection.execute("insert into userrepos values(?,?)",uid,rid)
+            repoid = connection.execute("insert into tenantrepos values(?,?)",tid,rid)
             trans.commit()
         except:
             trans.rollback()
@@ -284,8 +294,8 @@ def deleterepo():
         trans = connection.begin()
         try:
             result = connection.execute("delete from repos where rid=?",repoid)
-            result = connection.execute("delete from userrepos where rid=?",repoid)
-            result = connection.execute("delete from adminuserreporoles where rid=?",repoid)
+            result = connection.execute("delete from tenantrepos where rid=?",repoid)
+            result = connection.execute("delete from admintenantreporoles where rid=?",repoid)
 
             trans.commit()
         except:
@@ -318,14 +328,18 @@ def datatest3():
 @app.route('/repos/stats')
 @auth.oidc_auth
 def repostatistics():
-    result = db.engine.execute("select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques from repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
-    #result = db.engine.execute("select username, rname, r.rid, tdate, viewcount, vuniques, clonecount, cuniques from repotraffic rt, ghusers gu, repos r where r.ownerid=gu.uid and rt.rid=r.rid order by tdate desc, 3 asc")
+    statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+                from v_repostats r, v_adminuserrepos v
+                where r.rid=v.rid
+                and v.email=? """
+    # expand to limit number of selected days, e.g., past 30 days
+    result = db.engine.execute(statstmt,flask.session['id_token']['email'])
     return render_template('repostats.html',stats=result)
 
 @app.route('/datatest5')
 @auth.oidc_auth
 def datatest5():
-    result = db.engine.execute("select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount from repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
+    result = db.engine.execute("select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount from v_repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
     return json.dumps([dict(r) for r in result],default=alchemyencoder)
 
 
@@ -343,7 +357,7 @@ def generate_user():
 @auth.oidc_auth
 def generate_repostats():
     def generate():
-        result = db.engine.execute("select r.rid,r.orgname,r.tdate,r.viewcount from repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
+        result = db.engine.execute("select r.rid,r.orgname,r.tdate,r.viewcount from v_repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
         for row in result:
             yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')

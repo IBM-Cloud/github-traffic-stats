@@ -10,63 +10,6 @@
 
 
 {% block body %}
-<script type="text/javascript">
-  function addRepo() {
-    var xhttp;
-    var orgname = document.forms['newrepo'].elements['orgname'].value;
-    var reponame = document.forms['newrepo'].elements['reponame'].value;
-    xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function () {
-      if (xhttp.readyState == XMLHttpRequest.DONE) {
-        var response = JSON.parse(xhttp.responseText);
-        document.getElementById("messageResult").style.display = "block";
-        document.getElementById("plogmessage").innerHTML = "Message: " + response.message;
-        t=$('#repolist').DataTable();
-        t.row.add([response.repoid, orgname, reponame ]).node().id=response.repoid;
-        t.draw();
-        //var table = document.getElementById("repolist");
-        //var row = table.insertRow(-1);
-        //var cell1 = row.insertCell(0);
-        //var cell2 = row.insertCell(1);
-        //var cell3 = row.insertCell(2);
-        //cell1.innerHTML = response.repoid;
-        //cell2.innerHTML = orgname;
-        //cell3.innerHTML = reponame;
-        document.getElementById("orgname").value = '';
-        document.getElementById("reponame").value = '';
-      }
-    };
-    xhttp.open('POST', "/repos/newrepo");
-    xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-    var postVars = 'orgname=' + orgname + '&reponame=' + reponame;
-    xhttp.send(postVars);
-    return false;
-  }
-
-  function deleteRepo() {
-    var xhttp;
-    var repoid = document.forms['deleterepo'].elements['repoid'].value;
-    xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function () {
-      if (xhttp.readyState == XMLHttpRequest.DONE) {
-        var response = JSON.parse(xhttp.responseText);
-        document.getElementById("messageResult").style.display = "block";
-        document.getElementById("plogmessage").innerHTML = "Message: " + response.message;
-        // delete from shown HTML table and redraw
-        $('#repolist').DataTable().row("#"+repoid).remove().draw();
-        document.getElementById("repoid").value = '';
-      }
-    };
-    xhttp.open('POST', "/repos/deleterepo");
-    xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-    var postVars = 'repoid=' + repoid;
-    xhttp.send(postVars);
-    return false;
-  }
-
-</script>
-
-
 <div id="main" class="container">
     <h2 class="title is-2">Your Repositories</h2>
     <table id="repolist" class="table table-bordered table-hover dt-responsive" summary="List of your repositories">
@@ -137,6 +80,7 @@
 </div>
 {% endblock %}
 {% block extra_javascripts %}
+<script src="{{ url_for('static', filename='ghstats.js')}}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/datatables-bulma@1.0.1/js/dataTables.bulma.min.js"></script>

@@ -14,7 +14,7 @@
     <table id="syslogs" class="table table-bordered table-hover dt-responsive" summary="System logs for past 14 days">
       <thead>
       <tr>
-        <th>userid</th>
+        <th>tenantid</th>
         <th>completion date</th>
         <th>number of repositories</th>
         <th>state</th>
@@ -22,7 +22,7 @@
         <tbody>
       {%- for log in logs %}
       <tr>
-        <td>{{ log.uid }}</td>
+        <td>{{ log.tid }}</td>
         <td>{{ log.completed }}</td>
         <td>{{ log.numrepos }}</td>
         <td>{{ log.state }}</td>

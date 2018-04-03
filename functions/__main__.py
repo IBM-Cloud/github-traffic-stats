@@ -13,9 +13,9 @@ import github, json, ibm_db, sys, time
 # SQL statements
 #
 # fetch all users
-allUsersStatement="select uid, ghuser, ghtoken from users"
+allTenantsStatement="select tid, ghuser, ghtoken from tenants"
 # fetch all repos for a given userID
-allReposStatement="select r.rid, ghu.username, r.rname from userrepos ur,repos r, ghusers ghu where ur.rid=r.rid and r.ownerid=ghu.uid and ur.uid=?"
+allReposStatement="select r.rid, ghu.username, r.rname from tenantrepos tr,repos r, ghorgusers ghu where tr.rid=r.rid and r.oid=ghu.oid and tr.tid=?"
 
 # merge the view traffic data
 mergeViews1="merge into repotraffic rt using (values"
@@ -61,7 +61,7 @@ def main(args):
     global conn
     repoCount=0
     processedRepos=0
-    logtext="cloudfunction ()"
+    logtext="cloudfunction ("
     errortext=""
 
     ssldsn = args["__bx_creds"]["dashDB"]["ssldsn"]
@@ -70,23 +70,23 @@ def main(args):
         conn = ibm_db.connect(ssldsn, "", "")
 
     # go over all system users
-    allUsers=ibm_db.exec_immediate(conn,allUsersStatement)
-    if (allUsers):
+    allTenants=ibm_db.exec_immediate(conn,allTenantsStatement)
+    if (allTenants):
 
         # prepare statement for logging
         logStmt = ibm_db.prepare(conn, insertLogEntry)
 
         # fetch first user
-        sysuser=ibm_db.fetch_assoc(allUsers)
-        while sysuser != False:
+        tenant=ibm_db.fetch_assoc(allTenants)
+        while tenant != False:
             # go over all repos managed by that user and fetch traffic data
             # first, login to Github as that user
-            gh = github.GitHub(username=sysuser["GHUSER"],  access_token=sysuser["GHTOKEN"])
+            gh = github.GitHub(username=tenant["GHUSER"],  access_token=tenant["GHTOKEN"])
 
             userRepoCount=0
             # prepare and execute statement to fetch related repositories
             reposStmt = ibm_db.prepare(conn, allReposStatement)
-            if (ibm_db.execute(reposStmt,(sysuser["UID"],))):
+            if (ibm_db.execute(reposStmt,(tenant["TID"],))):
                 repo=ibm_db.fetch_assoc(reposStmt)
                 while repo != False:
                     repoCount=repoCount+1
@@ -115,9 +115,9 @@ def main(args):
             logtext=logtext+str(processedRepos)+"/"+str(repoCount)+")"
             if errortext !="":
                 logtext=logtext+", repo errors: "+errortext
-            res=ibm_db.execute(logStmt,(sysuser["UID"],time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,logtext))
+            res=ibm_db.execute(logStmt,(tenant["TID"],time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,logtext))
             # fetch next system user
-            sysuser=ibm_db.fetch_assoc(allUsers)
+            tenant=ibm_db.fetch_assoc(allTenants)
     return {"repoCount": repoCount}
 
 if __name__ == "__main__":
