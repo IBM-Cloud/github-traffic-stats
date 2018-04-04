@@ -1,4 +1,4 @@
-import flask, os, json, datetime, re
+import flask, os, json, datetime, re, requests
 import github
 from flask import Flask, jsonify,redirect,request,render_template, url_for, Response, stream_with_context
 
@@ -6,17 +6,34 @@ from flask_pyoidc.flask_pyoidc import OIDCAuthentication
 
 from sqlalchemy import Column, Table, Integer, String, select, ForeignKey
 from sqlalchemy.orm import relationship, backref
-#from sqlalchemy.ext.declarative import declarative_base
 from flask_sqlalchemy import SQLAlchemy
 
 
 app = Flask(__name__)
 
 if 'VCAP_SERVICES' in os.environ:
-   dbInfo = json.loads(os.environ['VCAP_SERVICES'])['dashDB'][0]
+   vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
+   dbInfo=vcapEnv['dashDB'][0]
    dbURI = dbInfo["credentials"]["uri"]
    app.config['SQLALCHEMY_DATABASE_URI']=dbURI
    app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
+   appIDInfo = vcapEnv['AppID'][0]
+   provider_config={
+        "issuer": "appid-oauth.ng.bluemix.net",
+        "authorization_endpoint": appIDInfo['credentials']['oauthServerUrl']+"/authorization",
+        "token_endpoint": appIDInfo['credentials']['oauthServerUrl']+"/token",
+        "userinfo_endpoint": "https://appid-profiles.ng.bluemix.net/api/v1/attributes",
+        "jwks_uri": appIDInfo['credentials']['oauthServerUrl']+"/publickeys"
+   }
+   client_info={
+       "client_id": appIDInfo['credentials']['clientId'],
+       "client_secret": appIDInfo['credentials']['secret']
+   }
+   # See http://flask.pocoo.org/docs/0.12/config/
+   app.config.update({'SERVER_NAME': os.environ['CF_INSTANCE_ADDR'],
+                      'SECRET_KEY': 'my_secret_key',
+                      'PREFERRED_URL_SCHEME': 'https'})
+   print os.environ['CF_INSTANCE_ADDR']
 
 # we are local, so load info from a file
 else:
@@ -26,16 +43,13 @@ else:
        appIDconfig=json.load(confFile)
        provider_config=appIDconfig['provider']
        client_info=appIDconfig['client']
-
-
-
-# See http://flask.pocoo.org/docs/0.12/config/
-app.config.update({'SERVER_NAME': '0.0.0.0:5000',
-                   'SECRET_KEY': 'my_secret_key',
-                   'PREFERRED_URL_SCHEME': 'http',
-                   #'SESSION_PERMANENT': True, # turn on flask session support
-                   'PERMANENT_SESSION_LIFETIME': 2592000, # session time in seconds (30 days)
-                   'DEBUG': True})
+       DDE=appIDconfig['DDE']
+   # See http://flask.pocoo.org/docs/0.12/config/
+   app.config.update({'SERVER_NAME': '0.0.0.0:5000',
+                      'SECRET_KEY': 'my_secret_key',
+                      'PREFERRED_URL_SCHEME': 'http',
+                      'PERMANENT_SESSION_LIFETIME': 2592000, # session time in seconds (30 days)
+                      'DEBUG': True})
 
 auth = OIDCAuthentication(app, provider_configuration_info=provider_config, client_registration_info=client_info,userinfo_endpoint_method=None)
 
@@ -112,7 +126,7 @@ def isTenantViewer():
 
 
 # Index page, unprotected to display some general information
-@app.route('/')
+@app.route('/', methods=['GET'])
 def index():
     return render_template('index.html')
 
@@ -123,12 +137,12 @@ def index():
 
 # could split string by semicolon and execute each stmt individually
 
-@app.route('/admin/initialize-app')
+@app.route('/admin/initialize-app', methods=['GET'])
 def initializeApp():
     return render_template('initializeapp.html')
 
 # Show page for entering user information for first system user and tenant
-@app.route('/admin/firststep')
+@app.route('/admin/firststep', methods=['GET'])
 @auth.oidc_auth
 def firststep():
     return render_template('firststep.html')
@@ -141,39 +155,51 @@ def firststep():
 @app.route('/admin/secondstep', methods=['POST'])
 @auth.oidc_auth
 def secondstep():
-    print "hello"
     print flask.session['id_token']['email']
     username=request.form['username']
     ghuser=request.form['ghuser']
     ghtoken=request.form['ghtoken']
     dbstmtstring=None
-    lines = open('database.sql', 'r')  # read the file line by line into array
+    sqlfile = open('database.sql', 'r')  # read the file line by line into array
     sqlcode = ''
-    for line in lines:
+    for line in sqlfile:
         sqlcode += re.sub(r'--.*', '', line.rstrip() )  # remove the in-line comments
 
     dbstatements = sqlcode.split(';') # split the text into commands
 
-    # connection = db.engine.connect()
-    # trans = connection.begin()
-    # try:
-    #     for stmt in dbstatements:
-    #         connection.execute(stmt)
-    #connection.execute("insert into adminusers (aid, auser, email) values(?,?,?)", 100, username, flask.session['id_token']['email'])
-    #connection.execute("insert into users (uid, ghuser, ghtoken) values(?,?,?)", 100, ghuser, ghtoken)
-    #connection.execute("insert into adminroles (aid, role) values(?,?)", 100, 5)
-    # Adminuser has tentant role for the tenant (user)
-    #connection.execute("insert into adminuserreporoles (aid, uid, role) values(?,?,?)", 100, 100, 4)
-    #     trans.commit()
-    # except:
-    #     trans.rollback()
-    #     raise
+    connection = db.engine.connect()
+    trans = connection.begin()
+    try:
+        # We are going to execute each of the DB schema-related statements,
+        # thereby creating the database structures and some configuration data.
+        # If there is an error, it means that the required setup has not between
+        # done or the environment has been already set up.
+        for stmt in dbstatements:
+            connection.execute(stmt)
+        connection.execute("insert into adminusers (aid, auser, email) values(?,?,?)", 100, username, flask.session['id_token']['email'])
+        connection.execute("insert into tenants (tid, ghuser, ghtoken) values(?,?,?)", 100, ghuser, ghtoken)
+        connection.execute("insert into adminroles (aid, role) values(?,?)", 100, 5)
+        # Adminuser has tentant role for the tenant (user)
+        connection.execute("insert into admintenantreporoles (aid, tid, role) values(?,?,?)", 100, 100, 4)
+        trans.commit()
+    except:
+        trans.rollback()
+        # for now raise error, but ideally report error and return to welcome page
+        raise
     return jsonify(stmts=dbstatements)
 
 @app.route('/repos/dashboard')
 @auth.oidc_auth
 def dashboard():
-    return render_template('dashboard.html')
+    # print request.url_root
+    #body={ "expiresIn": 3600, "webDomain" : "https://myportal.mybluemix.net" }
+    body={ "expiresIn": 3600, "webDomain" : request.url_root }
+    # print body
+    ddeUri=DDE['api_endpoint_url']+'v1/session'
+    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
+    # print res.text
+    # print json.loads(res.text)['sessionId']
+    return render_template('dashboard.html',sessionInfo=json.loads(res.text))
 
 
 
@@ -238,11 +264,11 @@ def newrepo():
         connection = db.engine.connect()
         trans = connection.begin()
         try:
-            uid=None
+            tid=None
             aid=None
             rid=None
             orgid=None
-            ghstmt="""select aurr.uid, au.aid,u.ghuser,u.ghtoken
+            ghstmt="""select atrr.tid, au.aid,u.ghuser,u.ghtoken
                       from  admintenantreporoles atrr, adminusers au, adminroles ar, tenants t
                       where ar.aid=au.aid
                       and atrr.aid=au.aid
@@ -268,10 +294,6 @@ def newrepo():
         except:
             trans.rollback()
             raise
-
-        # need to check if org exists
-        # need to insert userrepos: uid, rid
-
         return jsonify(message="Your new repo ID: "+str(rid), repoid=rid)
     else:
         return jsonify(message="Error: no repository added") # should go to error or info page
@@ -293,9 +315,15 @@ def deleterepo():
         connection = db.engine.connect()
         trans = connection.begin()
         try:
+            # delete the repo record
             result = connection.execute("delete from repos where rid=?",repoid)
+            # delete the relationship information
             result = connection.execute("delete from tenantrepos where rid=?",repoid)
+            # delete the role information
             result = connection.execute("delete from admintenantreporoles where rid=?",repoid)
+            # delete related traffic data
+            # IDEA: This app could be extended to ask whether to keep this data.
+            result = connection.execute("delete from repotraffic where rid=?",repoid)
 
             trans.commit()
         except:

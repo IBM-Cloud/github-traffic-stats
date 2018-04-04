@@ -19,11 +19,17 @@ allReposStatement="select r.rid, ghu.username, r.rname from tenantrepos tr,repos
 
 # merge the view traffic data
 mergeViews1="merge into repotraffic rt using (values"
-mergeViews2=") as nv(rid,viewdate,viewcount,uniques) on rt.rid=nv.rid and rt.tdate=nv.viewdate when matched then update set viewcount=nv.viewcount, vuniques=nv.uniques when not matched then insert (rid,tdate,viewcount, vuniques) values(nv.rid,nv.viewdate,nv.viewcount,nv.uniques)"
+mergeViews2=""") as nv(rid,viewdate,viewcount,uniques) on rt.rid=nv.rid and rt.tdate=nv.viewdate
+            when matched and nv.viewcount>rt.viewcount then update set viewcount=nv.viewcount, vuniques=coalesce(nv.uniques,0)
+            when not matched then insert (rid,tdate,viewcount, vuniques) values(nv.rid,nv.viewdate,coalesce(nv.viewcount,0),coalesce(nv.uniques,0))
+            else ignore"""
 
 # merge the clone traffic data
 mergeClones1="merge into repotraffic rt using (values"
-mergeClones2=") as nc(rid,clonedate,clonecount,uniques) on rt.rid=nc.rid and rt.tdate=nc.clonedate when matched then update set clonecount=nc.clonecount, cuniques=nc.uniques when not matched then insert (rid,tdate,clonecount,cuniques) values(nc.rid,nc.clonedate,nc.clonecount,nc.uniques)"
+mergeClones2=""") as nc(rid,clonedate,clonecount,uniques) on rt.rid=nc.rid and rt.tdate=nc.clonedate
+             when matched and nc.clonecount>rt.clonecount then update set clonecount=nc.clonecount, cuniques=coalesce(nc.uniques,0)
+             when not matched then insert (rid,tdate,clonecount,cuniques) values(nc.rid,nc.clonedate,coalesce(nc.clonecount,0),coalesce(nc.uniques,0))
+             else ignore"""
 
 # new syslog record
 insertLogEntry="insert into systemlog values(?,?,?,?)"

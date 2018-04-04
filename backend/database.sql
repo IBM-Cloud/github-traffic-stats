@@ -23,12 +23,12 @@ create table repos
 --- Github traffic statistics for views and clones
 create table repotraffic
 (
-  rid int,
-  tdate date,
-  viewcount int,
-  vuniques int,
-  clonecount int,
-  cuniques int
+  rid int not null,
+  tdate date not null,
+  viewcount int not null default 0,
+  vuniques int not null default 0,
+  clonecount int not null default 0,
+  cuniques int not null default 0
 ) organize by row;
 
 --- index to improve tdate-based search
@@ -66,6 +66,7 @@ create table tenantrepos
 )  organize by row;
 
 --- info about last data collection runs
+--- IDEA: Could extend this to capture elapsed run time to spot any issues
 create table systemlog
 (
   tid int not null,
@@ -129,7 +130,7 @@ create view v_adminuserrepos as
 );
 
 --- view to show statistics for all repos and include full organisation name
-create view v_repostats as (
+create or replace view v_repostats as (
   select r.rid, username as orgname, rname as reponame, tdate, viewcount, vuniques, clonecount, cuniques from repotraffic rt, ghorgusers gu, repos r where r.oid=gu.oid and rt.rid=r.rid
 );
 
