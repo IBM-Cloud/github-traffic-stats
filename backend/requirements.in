@@ -1,0 +1,5 @@
+# requirements.in
+Flask
+Flask-SQLAlchemy
+githubpy
+flask_pyoidc

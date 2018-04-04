@@ -385,7 +385,11 @@ def generate_user():
 @auth.oidc_auth
 def generate_repostats():
     def generate():
-        result = db.engine.execute("select r.rid,r.orgname,r.tdate,r.viewcount from v_repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
+        statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+                    from v_repostats r, v_adminuserrepos v
+                    where r.rid=v.rid
+                    and v.email=? """
+        result = db.engine.execute(statstmt,flask.session['id_token']['email'])
         for row in result:
             yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
