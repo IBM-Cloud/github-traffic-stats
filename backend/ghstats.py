@@ -30,10 +30,9 @@ if 'VCAP_SERVICES' in os.environ:
        "client_secret": appIDInfo['credentials']['secret']
    }
    # See http://flask.pocoo.org/docs/0.12/config/
-   app.config.update({'SERVER_NAME': os.environ['CF_INSTANCE_ADDR'],
+   app.config.update({'SERVER_NAME': json.loads(os.environ['VCAP_APPLICATION'])['uris'][0],
                       'SECRET_KEY': 'my_secret_key',
                       'PREFERRED_URL_SCHEME': 'https'})
-   print os.environ['CF_INSTANCE_ADDR']
 
 # we are local, so load info from a file
 else:
