@@ -3,3 +3,5 @@ Flask
 Flask-SQLAlchemy
 githubpy
 flask_pyoidc
+ibm_db_sa
+ibm_db

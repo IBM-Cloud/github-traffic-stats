@@ -19,6 +19,8 @@ flask==0.12.1
 funcsigs==1.0.2           # via beaker
 future==0.16.0            # via oic, pyjwkest
 githubpy==1.1.0
+ibm-db-sa==0.3.3
+ibm-db==2.0.8
 idna==2.6                 # via cryptography, requests
 ipaddress==1.0.19         # via cryptography
 itsdangerous==0.24        # via flask
@@ -32,6 +34,6 @@ pyjwkest==1.4.0           # via oic
 pyopenssl==17.5.0         # via oic
 requests==2.18.4          # via oic, pyjwkest
 six==1.11.0               # via cryptography, oic, pyjwkest, pyopenssl
-sqlalchemy==1.2.6         # via flask-sqlalchemy
+sqlalchemy==1.2.6         # via flask-sqlalchemy, ibm-db-sa
 urllib3==1.22             # via requests
 werkzeug==0.12.1          # via flask
