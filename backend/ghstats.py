@@ -16,11 +16,14 @@ import github # githubpy module
 from flask import Flask, jsonify,redirect,request,render_template, url_for, Response, stream_with_context
 
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
-
 from sqlalchemy import Column, Table, Integer, String, select, ForeignKey
 from sqlalchemy.orm import relationship, backref
 from flask_sqlalchemy import SQLAlchemy
 
+
+# monkey patch for now, so that Flask-pyoidc works with App ID
+import mypatch
+OIDCAuthentication._handle_authentication_response=mypatch.my_handle_authentication_response
 
 app = Flask(__name__)
 
@@ -114,6 +117,10 @@ def isTenant():
 def isTenantViewer():
     return bool(flask.session['userrole'] & 8)
 
+# Has the user the role of tenant stats viewer?
+def isRepoViewer():
+    return bool(flask.session['userrole'] & 16)
+
 
 # Index page, unprotected to display some general information
 @app.route('/', methods=['GET'])
@@ -204,7 +211,10 @@ def logout():
 @app.route('/admin/newtenant')
 @auth.oidc_auth
 def newtenant():
-    return render_template('newuser.html')
+    if isAdministrator():
+        return render_template('newuser.html')
+    else:
+        return render_template('notavailable.html') # should go to error or info page
 
 
 # Show table with system logs
@@ -221,13 +231,16 @@ def systemlog():
 @app.route('/repos/stats')
 @auth.oidc_auth
 def repostatistics():
-    statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
-                from v_repostats r, v_adminuserrepos v
-                where r.rid=v.rid
-                and v.email=? """
-    # IDEA: expand to limit number of selected days, e.g., past 30 days
-    result = db.engine.execute(statstmt,flask.session['id_token']['email'])
-    return render_template('repostats.html',stats=result)
+    if isTenant() or isTenantViewer() or isRepoViewer():
+        statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+                    from v_repostats r, v_adminuserrepos v
+                    where r.rid=v.rid
+                    and v.email=? """
+        # IDEA: expand to limit number of selected days, e.g., past 30 days
+        result = db.engine.execute(statstmt,flask.session['id_token']['email'])
+        return render_template('repostats.html',stats=result)
+    else:
+        return render_template('notavailable.html') # should go to error or info page
 
 
 # Show list of managed repositories
