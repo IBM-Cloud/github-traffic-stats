@@ -15,7 +15,7 @@ function addRepo() {
       document.getElementById("reponame").value = '';
     }
   };
-  xhttp.open('POST', "/repos/newrepo");
+  xhttp.open('POST', "/api/newrepo");
   xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
   var postVars = 'orgname=' + orgname + '&reponame=' + reponame;
   xhttp.send(postVars);
@@ -36,7 +36,7 @@ function deleteRepo() {
       document.getElementById("repoid").value = '';
     }
   };
-  xhttp.open('POST', "/repos/deleterepo");
+  xhttp.open('POST', "/api/deleterepo");
   xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
   var postVars = 'repoid=' + repoid;
   xhttp.send(postVars);

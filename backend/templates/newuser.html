@@ -2,10 +2,10 @@
 {% block body %}
 <div id="main" class="container">
 
-<h3 class="title is-3">Add new user</h3>
+<h3 class="title is-3">Add new tenant</h3>
 
 
-<form action="" name="newrepo">
+<form action="/admin" name="newtenant">
 <div class="field">
   <label class="label">Name</label>
   <div class="control">
@@ -14,16 +14,16 @@
 </div>
 
 <div class="field">
-  <label class="label">User ID</label>
+  <label class="label">Github user ID</label>
   <div class="control">
-    <input class="input" type="text" placeholder="Text input" value="userid">
+    <input class="input" type="text" placeholder="Github username">
   </div>
 </div>
 
 <div class="field">
   <label class="label">Email</label>
   <div class="control has-icons-left has-icons-right">
-    <input class="input" type="email" placeholder="Email input" value="email@example.com">
+    <input class="input" type="email" placeholder="email@example.com">
     <span class="icon is-small is-left">
       <i class="fas fa-envelope"></i>
     </span>
@@ -33,7 +33,7 @@
 <div class="field">
   <label class="label">Github access token</label>
   <div class="control">
-    <input class="input" type="text" placeholder="Text input" value="ghtoken">
+    <input class="input" type="text" placeholder="your token">
   </div>
 </div>
 

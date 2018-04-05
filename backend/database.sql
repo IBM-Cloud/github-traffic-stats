@@ -31,7 +31,8 @@ create table repotraffic
   cuniques int not null default 0
 ) organize by row;
 
---- index to improve tdate-based search
+--- indexes to improve tdate-based search
+create index repotraffic_ix_rid_tdate on repotraffic(rid,tdate);
 create index repotraffic_ix_tdate on repotraffic(tdate);
 
 --- The tenant, i.e. the user which accesses Github.

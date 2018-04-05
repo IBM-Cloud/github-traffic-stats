@@ -1,3 +1,16 @@
+# Manage repositories to automatically collect Github traffic statistics.
+# Traffic data can be displayed, repositories added or deleted.
+#
+# Most actions are protected by using IBM Cloud App ID as an openID Connect
+# authorization provider. Data is stored in a Db2 Warehouse on Cloud database.
+# The app is designed to be ready for multi-tenant use, but not all functionality
+# has been implemented yet. Right now, single-tenant operations are assumed.
+#
+# For the database schema see the file database.sql
+#
+# Written by Henrik Loeser (data-henrik), hloeser@de.ibm.com
+# (C) 2018 by IBM
+
 import flask, os, json, datetime, re, requests
 import github
 from flask import Flask, jsonify,redirect,request,render_template, url_for, Response, stream_with_context
@@ -11,12 +24,17 @@ from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
+# Check if we are in a Cloud Foundry environment, i.e., on IBM Cloud
 if 'VCAP_SERVICES' in os.environ:
    vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
+
+   # Configure access to Db2 Warehouse database
    dbInfo=vcapEnv['dashDB'][0]
    dbURI = dbInfo["credentials"]["uri"]
    app.config['SQLALCHEMY_DATABASE_URI']=dbURI
    app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
+
+   # Configure access to App ID service and openID Connect client
    appIDInfo = vcapEnv['AppID'][0]
    provider_config={
         "issuer": "appid-oauth.ng.bluemix.net",
@@ -29,6 +47,10 @@ if 'VCAP_SERVICES' in os.environ:
        "client_id": appIDInfo['credentials']['clientId'],
        "client_secret": appIDInfo['credentials']['secret']
    }
+
+   # Configure access to DDE service
+   DDE=vcapEnv['dynamic-dashboard-embedded'][0]['credentials']
+
    # See http://flask.pocoo.org/docs/0.12/config/
    app.config.update({'SERVER_NAME': json.loads(os.environ['VCAP_APPLICATION'])['uris'][0],
                       'SECRET_KEY': 'my_secret_key',
@@ -50,45 +72,14 @@ else:
                       'PERMANENT_SESSION_LIFETIME': 2592000, # session time in seconds (30 days)
                       'DEBUG': True})
 
+# Initialize openID Connect client
 auth = OIDCAuthentication(app, provider_configuration_info=provider_config, client_registration_info=client_info,userinfo_endpoint_method=None)
 
-
+# Initialize SQLAlchemy for our database
 db = SQLAlchemy(app, session_options={'autocommit': True})
 
 
-class User(db.Model):
-    __tablename__ = 'tenants'
-    tid = Column(Integer, primary_key=True)
-    fname = Column(String)
-    lname = Column(String)
-    email = Column(String)
-    ghuser = Column(String)
-    ghtoken = Column(String)
-
-class Repo(db.Model):
-    __tablename__ = 'repos'
-    rid = Column(Integer, primary_key=True)
-    rname = Column(String)
-    ghserverid = Column(Integer)
-    oid = Column(Integer)
-    schedule = Column(Integer)
-
-    @property
-    def serialize(self):
-        return {
-           'id'         : self.rid,
-           'rname'      : self.rname,
-           'oid'    : self.oid
-           }
-
-class AdminUser(db.Model):
-    __tablename__ = 'adminusers'
-    aid = Column(Integer, primary_key=True)
-    auser = Column(String)
-    email = Column(String)
-
-
-
+# Encoder to handle some raw data correctly
 def alchemyencoder(obj):
     """JSON encoder function for SQLAlchemy special classes."""
     if isinstance(obj, datetime.date):
@@ -96,6 +87,7 @@ def alchemyencoder(obj):
     elif isinstance(obj, decimal.Decimal):
         return float(obj)
 
+# Set the role for the current session user
 def setuserrole(email=None):
     result = db.engine.execute("select role from adminroles ar, adminusers au where ar.aid=au.aid and au.email=?",email)
     for row in result:
@@ -105,7 +97,6 @@ def setuserrole(email=None):
     # or no row at all
     flask.session['userrole']=None
     return None
-
 
 # Has the user the role of administrator?
 def isAdministrator():
@@ -154,7 +145,6 @@ def firststep():
 @app.route('/admin/secondstep', methods=['POST'])
 @auth.oidc_auth
 def secondstep():
-    print flask.session['id_token']['email']
     username=request.form['username']
     ghuser=request.form['ghuser']
     ghtoken=request.form['ghtoken']
@@ -183,51 +173,39 @@ def secondstep():
         trans.commit()
     except:
         trans.rollback()
-        # for now raise error, but ideally report error and return to welcome page
-        raise
-    return jsonify(stmts=dbstatements)
+        # for now ignore error and return to index page, but ideally report error and return to welcome page
+        return redirect(url_for('index'))
+    return redirect(url_for('listrepos'))
 
-@app.route('/repos/dashboard')
-@auth.oidc_auth
-def dashboard():
-    # print request.url_root
-    #body={ "expiresIn": 3600, "webDomain" : "https://myportal.mybluemix.net" }
-    body={ "expiresIn": 3600, "webDomain" : request.url_root }
-    # print body
-    ddeUri=DDE['api_endpoint_url']+'v1/session'
-    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
-    # print res.text
-    # print json.loads(res.text)['sessionId']
-    return render_template('dashboard.html',sessionInfo=json.loads(res.text))
-
-
-
+# Official login URI, redirects to repo stats after processing
 @app.route('/login')
 @auth.oidc_auth
 def login():
     setuserrole(flask.session['id_token']['email'])
-    return render_template('welcome.html',id=flask.session['id_token'], role=flask.session['userrole'])
+    return redirect(url_for('repostatistics'))
 
-@app.route('/welcome')
+# Show a user profile
+@app.route('/user')
+@app.route('/user/profile')
 @auth.oidc_auth
-def index2():
-    return "Welcome, "+flask.session['id_token']['email']
+def profile():
+    return render_template('profile.html',id=flask.session['id_token'], role=flask.session['userrole'])
 
-
+# End the session by logging off
 @app.route('/logout')
 @auth.oidc_logout
 def logout():
     flask.session['userrole']=None
     return redirect(url_for('index'))
 
-@app.route('/admin/newuser')
+# Form to enter new tenant data
+@app.route('/admin/newtenant')
 @auth.oidc_auth
-def newuser():
+def newtenant():
     return render_template('newuser.html')
 
 
-
-
+# Show table with system logs
 @app.route('/admin/systemlog')
 @auth.oidc_auth
 def systemlog():
@@ -235,9 +213,23 @@ def systemlog():
         result = db.engine.execute("select tid, completed, numrepos, state from systemlog where completed >(current date - 21 days) order by completed desc, tid asc")
         return render_template('systemlog.html',logs=result)
     else:
-        return "no logs" # should go to error or info page
+        return render_template('notavailable.html') # should go to error or info page
+
+# return page with the repository stats
+@app.route('/repos/stats')
+@auth.oidc_auth
+def repostatistics():
+    statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+                from v_repostats r, v_adminuserrepos v
+                where r.rid=v.rid
+                and v.email=? """
+    # IDEA: expand to limit number of selected days, e.g., past 30 days
+    result = db.engine.execute(statstmt,flask.session['id_token']['email'])
+    return render_template('repostats.html',stats=result)
 
 
+# Show list of managed repositories
+@app.route('/repos')
 @app.route('/repos/list')
 @auth.oidc_auth
 def listrepos():
@@ -245,17 +237,16 @@ def listrepos():
         result = db.engine.execute("select rid,orgname, reponame from v_adminrepolist where email=? order by rid asc",flask.session['id_token']['email'])
         return render_template('repolist.html',repos=result)
     else:
-        return "no repos" # should go to error or info page
+        return render_template('notavailable.html') # should go to error or info page
 
-@app.route('/repos/newrepo', methods=['POST'])
+# Process the request to add a new repository
+@app.route('/api/newrepo', methods=['POST'])
 @auth.oidc_auth
 def newrepo():
     if isTenant():
         # Access form data from app
         orgname=request.form['orgname']
         reponame=request.form['reponame']
-        # Log to stdout stream
-        print orgname
 
         # could check if repo exists
         # but skipping to reduce complexity
@@ -267,18 +258,18 @@ def newrepo():
             aid=None
             rid=None
             orgid=None
-            ghstmt="""select atrr.tid, au.aid,u.ghuser,u.ghtoken
+            ghstmt="""select atrr.tid, au.aid,t.ghuser,t.ghtoken
                       from  admintenantreporoles atrr, adminusers au, adminroles ar, tenants t
                       where ar.aid=au.aid
                       and atrr.aid=au.aid
                       and t.tid=atrr.tid
-                      and bitand(aurr.role,4)>0
+                      and bitand(atrr.role,4)>0
                       and au.email=?   """
             githubinfo = connection.execute(ghstmt,flask.session['id_token']['email'])
             for row in githubinfo:
                 tid=row['tid']
                 aid=row['aid']
-            orgidinfo = connection.execute("select tid from ghorgusers where username=?",orgname)
+            orgidinfo = connection.execute("select oid from ghorgusers where username=?",orgname)
             for row in orgidinfo:
                 orgid=row['oid']
             if orgid is None:
@@ -293,18 +284,21 @@ def newrepo():
         except:
             trans.rollback()
             raise
+        # Log to stdout stream
+        print "Created repo with id "+str(rid)
         return jsonify(message="Your new repo ID: "+str(rid), repoid=rid)
     else:
         return jsonify(message="Error: no repository added") # should go to error or info page
 
-@app.route('/repos/deleterepo', methods=['POST'])
+# Process the request to delete a repository
+@app.route('/api/deleterepo', methods=['POST'])
 @auth.oidc_auth
 def deleterepo():
     if isTenant():
         # Access form data from app
         repoid=request.form['repoid']
         # Log to stdout stream
-        print repoid
+        print "Deleted repo with id "+str(repoid)
 
         # could check if repo exists
         # but skipping to reduce complexity
@@ -334,40 +328,18 @@ def deleterepo():
 
 
 
-
-@app.route('/datatest')
+@app.route('/repos/dashboard')
 @auth.oidc_auth
-def datatest():
-    return render_template('data.html',
-    	   items=User.query.all() )
-
-@app.route('/datatest2')
-@auth.oidc_auth
-def datatest2():
-    return render_template('data2.html',
-    	   reposs=Repo.query.all() )
-
-@app.route('/datatest3')
-@auth.oidc_auth
-def datatest3():
-    return jsonify(json_list=[i.serialize for i in Repo.query.all()])
-
-@app.route('/repos/stats')
-@auth.oidc_auth
-def repostatistics():
-    statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
-                from v_repostats r, v_adminuserrepos v
-                where r.rid=v.rid
-                and v.email=? """
-    # expand to limit number of selected days, e.g., past 30 days
-    result = db.engine.execute(statstmt,flask.session['id_token']['email'])
-    return render_template('repostats.html',stats=result)
-
-@app.route('/datatest5')
-@auth.oidc_auth
-def datatest5():
-    result = db.engine.execute("select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount from v_repostats r, v_adminuserrepos v where v.email=? and r.rid=v.rid",flask.session['id_token']['email'])
-    return json.dumps([dict(r) for r in result],default=alchemyencoder)
+def dashboard():
+    # print request.url_root
+    #body={ "expiresIn": 3600, "webDomain" : "https://myportal.mybluemix.net" }
+    body={ "expiresIn": 3600, "webDomain" : request.url_root }
+    # print body
+    ddeUri=DDE['api_endpoint_url']+'v1/session'
+    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
+    # print res.text
+    # print json.loads(res.text)['sessionId']
+    return render_template('dashboard.html',sessionInfo=json.loads(res.text))
 
 
 # return the currently active user as csv file
@@ -393,6 +365,14 @@ def generate_repostats():
             yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
 
+
+@app.route('/admin')
+@app.route('/data')
+@auth.oidc_auth
+def not_available():
+    return render_template('notavailable.html')
+
+# error function for auth module
 @auth.error_view
 def error(error=None, error_description=None):
     return jsonify({'error': error, 'message': error_description})

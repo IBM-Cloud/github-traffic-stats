@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block title %}
+<title>Github Traffic Analytics - Profile</title>
+{% endblock %}
+
+
+{% block body %}
+<div id="main" class="container">
+    <h2 class="title is-2">User profile</h2>
+    <div class="box">
+    <nav class="level">
+      <div class="level-item has-text-centered">
+        <div>
+          <p class="heading">Name</p>
+          <p class="title">{{ id['name'] }}</p>
+        </div>
+      </div>
+      <div class="level-item has-text-centered">
+        <div>
+          <p class="heading">Email</p>
+          <p class="title">{{ id['email'] }}</p>
+        </div>
+      </div>
+      <div class="level-item has-text-centered">
+        <div>
+          <p class="heading">Role (int)</p>
+          <p class="title">{{ role }}</p>
+        </div>
+      </div>
+      <div class="level-item has-text-centered">
+        <div>
+          <p class="heading">Administrator</p>
+          <p class="title">{% if role is odd %}Yes{% else %}No{% endif %}</p>
+        </div>
+      </div>
+
+    </nav>
+  </div>
+
+    {% if role is divisibleby(2) %}
+    <p>sysmaint</p>
+    {% endif %}
+</div>
+{% endblock %}
