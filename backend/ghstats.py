@@ -12,7 +12,7 @@
 # (C) 2018 by IBM
 
 import flask, os, json, datetime, re, requests
-import github
+import github # githubpy module
 from flask import Flask, jsonify,redirect,request,render_template, url_for, Response, stream_with_context
 
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
@@ -366,6 +366,7 @@ def generate_repostats():
     return Response(stream_with_context(generate()), mimetype='text/csv')
 
 
+# Some functionality is not available yet
 @app.route('/admin')
 @app.route('/data')
 @auth.oidc_auth
