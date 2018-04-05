@@ -175,6 +175,8 @@ def secondstep():
         trans.rollback()
         # for now ignore error and return to index page, but ideally report error and return to welcome page
         return redirect(url_for('index'))
+    # Have to set userrole because now the data is ready
+    setuserrole(flask.session['id_token']['email'])
     return redirect(url_for('listrepos'))
 
 # Official login URI, redirects to repo stats after processing

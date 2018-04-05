@@ -6,3 +6,4 @@ applications:
   services:
   - ghstatsDB
   - ghstatsAppID
+  - ghstatsDDE
