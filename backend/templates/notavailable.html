@@ -6,6 +6,9 @@
 
 {% block body %}
 <div id="main" class="container">
-    Thank you for your interested, but this is not available yet.
+    Thank you for your interested, but this is not available.
+    {% if message is defined %}
+      {{ message }}
+    {% endif %}
 </div>
 {% endblock %}

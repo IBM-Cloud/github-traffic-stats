@@ -92,14 +92,15 @@ def alchemyencoder(obj):
 
 # Set the role for the current session user
 def setuserrole(email=None):
-    result = db.engine.execute("select role from adminroles ar, adminusers au where ar.aid=au.aid and au.email=?",email)
-    for row in result:
-        flask.session['userrole']=row[0]
-        # there should be exactly one matching row
-        return row[0]
-    # or no row at all
-    flask.session['userrole']=None
-    return None
+    flask.session['userrole']=0
+    try:
+        result = db.engine.execute("select role from adminroles ar, adminusers au where ar.aid=au.aid and au.email=?",email)
+        for row in result:
+            # there should be exactly one matching row
+            flask.session['userrole']=row[0]
+    except:
+        pass
+    return flask.session['userrole']
 
 # Has the user the role of administrator?
 def isAdministrator():
@@ -214,7 +215,7 @@ def newtenant():
     if isAdministrator():
         return render_template('newuser.html')
     else:
-        return render_template('notavailable.html') # should go to error or info page
+        return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
 
 
 # Show table with system logs
@@ -225,7 +226,7 @@ def systemlog():
         result = db.engine.execute("select tid, completed, numrepos, state from systemlog where completed >(current date - 21 days) order by completed desc, tid asc")
         return render_template('systemlog.html',logs=result)
     else:
-        return render_template('notavailable.html') # should go to error or info page
+        return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
 
 # return page with the repository stats
 @app.route('/repos/stats')
@@ -240,7 +241,7 @@ def repostatistics():
         result = db.engine.execute(statstmt,flask.session['id_token']['email'])
         return render_template('repostats.html',stats=result)
     else:
-        return render_template('notavailable.html') # should go to error or info page
+        return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
 
 
 # Show list of managed repositories
@@ -252,7 +253,7 @@ def listrepos():
         result = db.engine.execute("select rid,orgname, reponame from v_adminrepolist where email=? order by rid asc",flask.session['id_token']['email'])
         return render_template('repolist.html',repos=result)
     else:
-        return render_template('notavailable.html') # should go to error or info page
+        return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
 
 # Process the request to add a new repository
 @app.route('/api/newrepo', methods=['POST'])
@@ -370,16 +371,32 @@ def generate_user():
 @app.route('/data/repostats.csv')
 @auth.oidc_auth
 def generate_repostats():
+    if isTenant() or isTenantViewer():
+        def generate():
+            statstmt="""select r.rid,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+                        from v_repostats r, v_adminuserrepos v
+                        where r.rid=v.rid
+                        and v.email=? """
+            result = db.engine.execute(statstmt,flask.session['id_token']['email'])
+            yield "RID,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
+            for row in result:
+                yield ','.join(map(str,row)) + '\n'
+        return Response(stream_with_context(generate()), mimetype='text/csv')
+    else:
+        return render_template('notavailable.html')
+
+@app.route('/data/repositories.csv')
+@auth.oidc_auth
+def generate_repolist():
     def generate():
-        statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
-                    from v_repostats r, v_adminuserrepos v
-                    where r.rid=v.rid
-                    and v.email=? """
-        result = db.engine.execute(statstmt,flask.session['id_token']['email'])
+        repolist_stmt="""select rid,orgname, reponame
+                         from v_adminrepolist
+                         where email=? order by rid asc"""
+        result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
+        yield "RID,ORGNAME,REPONAME\n"
         for row in result:
             yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
-
 
 # Some functionality is not available yet
 @app.route('/admin')
