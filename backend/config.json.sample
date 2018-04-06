@@ -1,13 +1,32 @@
-{ "provider":
- {
-    "issuer": "appid-oauth.ng.bluemix.net",
-    "authorization_endpoint": "https://appid-oauth.ng.bluemix.net/oauth/v3/tenantID/authorization",
-    "token_endpoint": "https://appid-oauth.ng.bluemix.net/oauth/v3/tenantID/token",
-    "userinfo_endpoint": "https://appid-profiles.ng.bluemix.net/api/v1/attributes",
-    "jwks_uri": "https://appid-oauth.ng.bluemix.net/oauth/v3/tenantID/publickeys"
+{
+"AppID": {
+     "clientId": "your App ID client Id",
+     "managementUrl": "https://appid-management.ng.bluemix.net/management/v4/-----tenantID----",
+     "oauthServerUrl": "https://appid-oauth.ng.bluemix.net/oauth/v3/-----tenantID----",
+     "profilesUrl": "https://appid-profiles.ng.bluemix.net",
+     "secret": "the App ID secret",
+     "tenantId": "-----tenantID----",
+     "version": 3
 },
-"client": {
-    "client_id": "yourClientID",
-    "client_secret": "youClientSecret"
+"dashDB":
+{
+     "db": "BLUDB",
+     "dsn": "DATABASE=BLUDB;HOSTNAME=dashdb------.services.---.bluemix.net;PORT=50000;PROTOCOL=TCPIP;UID=dashxxxxx;PWD=xxxxxxxx;",
+     "host": "dashdb-------.services.---.bluemix.net",
+     "hostname": "dashdb------.services.---.bluemix.net",
+     "https_url": "https://dashdb-----------.bluemix.net:8443",
+     "jdbcurl": "jdbc:db2://dashdb---------------.bluemix.net:50000/BLUDB",
+     "password": "the password",
+     "port": 50000,
+     "ssldsn": "DATABASE=BLUDB;HOSTNAME=dashdb-------------------.bluemix.net;PORT=50001;PROTOCOL=TCPIP;UID=dashxxxxx;PWD=xxxxxxxxx;Security=SSL;",
+     "ssljdbcurl": "jdbc:db2://dashdb------------------.bluemix.net:50001/BLUDB:sslConnection=true;",
+     "uri": "db2://dashxxxxx:xxxxxxxxxxx@dashdb---------------.bluemix.net:50000/BLUDB",
+     "username": "dashxxxxx"
+   },
+"DDE": {
+  "api_endpoint_url": "https://dde-us-south.analytics.ibm.com/daas/",
+  "apikey": "xxxxxxxxxxxxxxx",
+  "client_id": "yyyyyyyyyyyyyy",
+  "client_secret": "zzzzzzzzzzzzzzzzz",
 }
 }

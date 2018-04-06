@@ -31,25 +31,11 @@ app = Flask(__name__)
 if 'VCAP_SERVICES' in os.environ:
    vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
 
-   # Configure access to Db2 Warehouse database
-   dbInfo=vcapEnv['dashDB'][0]
-   dbURI = dbInfo["credentials"]["uri"]
-   app.config['SQLALCHEMY_DATABASE_URI']=dbURI
-   app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
+   # Obtain configuration for Db2 Warehouse database
+   dbInfo=vcapEnv['dashDB'][0]['credentials']
 
-   # Configure access to App ID service and openID Connect client
-   appIDInfo = vcapEnv['AppID'][0]
-   provider_config={
-        "issuer": "appid-oauth.ng.bluemix.net",
-        "authorization_endpoint": appIDInfo['credentials']['oauthServerUrl']+"/authorization",
-        "token_endpoint": appIDInfo['credentials']['oauthServerUrl']+"/token",
-        "userinfo_endpoint": "https://appid-profiles.ng.bluemix.net/api/v1/attributes",
-        "jwks_uri": appIDInfo['credentials']['oauthServerUrl']+"/publickeys"
-   }
-   client_info={
-       "client_id": appIDInfo['credentials']['clientId'],
-       "client_secret": appIDInfo['credentials']['secret']
-   }
+   # Obtain configuration for
+   appIDInfo = vcapEnv['AppID'][0]['credentials']
 
    # Configure access to DDE service
    DDE=vcapEnv['dynamic-dashboard-embedded'][0]['credentials']
@@ -57,23 +43,47 @@ if 'VCAP_SERVICES' in os.environ:
    # See http://flask.pocoo.org/docs/0.12/config/
    app.config.update({'SERVER_NAME': json.loads(os.environ['VCAP_APPLICATION'])['uris'][0],
                       'SECRET_KEY': 'my_secret_key',
-                      'PREFERRED_URL_SCHEME': 'https'})
+                      'PREFERRED_URL_SCHEME': 'https',
+                      'DEBUG': False})
 
 # we are local, so load info from a file
 else:
-   app.config.from_pyfile('server.cfg')
    # Credentials are read from a file
    with open('config.json') as confFile:
-       appIDconfig=json.load(confFile)
-       provider_config=appIDconfig['provider']
-       client_info=appIDconfig['client']
-       DDE=appIDconfig['DDE']
+       # load JSON data from file
+       appConfig=json.load(confFile)
+       # Extract AppID configuration
+       appIDInfo=appConfig['AppID']
+       # Config for Db2
+       dbInfo=appConfig['dashDB']
+       #Config for DDE
+       DDE=appConfig['DDE']
    # See http://flask.pocoo.org/docs/0.12/config/
    app.config.update({'SERVER_NAME': '0.0.0.0:5000',
                       'SECRET_KEY': 'my_secret_key',
                       'PREFERRED_URL_SCHEME': 'http',
                       'PERMANENT_SESSION_LIFETIME': 2592000, # session time in seconds (30 days)
                       'DEBUG': True})
+
+# General setup based on the obtained configuration
+#
+# Configure database access
+app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
+app.config['SQLALCHEMY_ECHO']=False
+
+# Configure access to App ID service and openID Connect client
+provider_config={
+     "issuer": "appid-oauth.ng.bluemix.net",
+     "authorization_endpoint": appIDInfo['oauthServerUrl']+"/authorization",
+     "token_endpoint": appIDInfo['oauthServerUrl']+"/token",
+     "userinfo_endpoint": appIDInfo['profilesUrl']+"/api/v1/attributes",
+     "jwks_uri": appIDInfo['oauthServerUrl']+"/publickeys"
+}
+client_info={
+    "client_id": appIDInfo['clientId'],
+    "client_secret": appIDInfo['secret']
+}
 
 # Initialize openID Connect client
 auth = OIDCAuthentication(app, provider_configuration_info=provider_config, client_registration_info=client_info,userinfo_endpoint_method=None)
