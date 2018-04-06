@@ -24,6 +24,7 @@
 
 	  <div id="navbarTop" class="navbar-menu">
 	    <div class="navbar-start">
+				{% if startpage is not defined %}
 	      <div class="navbar-item has-dropdown is-hoverable">
 	          <a class="navbar-link" href="">Repositories</a>
 	        <div class="navbar-dropdown is-boxed">
@@ -64,6 +65,7 @@
 	          </a>
 	        </div>
 	      </div>
+				{% endif %}
 	    </div>
 
 	    <div class="navbar-end">

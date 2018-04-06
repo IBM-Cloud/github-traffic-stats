@@ -91,7 +91,6 @@ auth = OIDCAuthentication(app, provider_configuration_info=provider_config, clie
 # Initialize SQLAlchemy for our database
 db = SQLAlchemy(app, session_options={'autocommit': True})
 
-
 # Encoder to handle some raw data correctly
 def alchemyencoder(obj):
     """JSON encoder function for SQLAlchemy special classes."""
@@ -136,7 +135,7 @@ def isRepoViewer():
 # Index page, unprotected to display some general information
 @app.route('/', methods=['GET'])
 def index():
-    return render_template('index.html')
+    return render_template('index.html', startpage=True)
 
 
 # have "unprotected" page with instructions
