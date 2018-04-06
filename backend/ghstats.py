@@ -111,25 +111,32 @@ def setuserrole(email=None):
         pass
     return flask.session['userrole']
 
+# Check for userrole
+def checkUserrole(checkbit=0):
+    if "userrole" in flask.session:
+        return (flask.session['userrole'] & checkbit)
+    else:
+        return False
+
 # Has the user the role of administrator?
 def isAdministrator():
-    return bool(flask.session['userrole'] & 1)
+    return checkUserrole(checkbit=1)
 
 # Has the user the role of system maintainer?
 def isSysMaintainer():
-    return bool(flask.session['userrole'] & 1 + flask.session['userrole'] & 2)
+    return checkUserrole(checkbit=2)
 
 # Has the user the role of tenant?
 def isTenant():
-    return bool(flask.session['userrole'] & 4)
+    return checkUserrole(checkbit=4)
 
 # Has the user the role of tenant stats viewer?
 def isTenantViewer():
-    return bool(flask.session['userrole'] & 8)
+    return checkUserrole(checkbit=8)
 
 # Has the user the role of tenant stats viewer?
 def isRepoViewer():
-    return bool(flask.session['userrole'] & 16)
+    return checkUserrole(checkbit=16)
 
 
 # Index page, unprotected to display some general information
