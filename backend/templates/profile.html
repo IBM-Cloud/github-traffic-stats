@@ -27,13 +27,34 @@
           <p class="title">{{ role }}</p>
         </div>
       </div>
+      <br/>
+
+    </nav>
+    <nav class="level">
       <div class="level-item has-text-centered">
         <div>
           <p class="heading">Administrator</p>
           <p class="title">{% if role is odd %}Yes{% else %}No{% endif %}</p>
         </div>
       </div>
-
+      <div class="level-item has-text-centered">
+        <div>
+          <p class="heading">System Maintainer</p>
+          <p class="title">{% if (role//2) is odd %}Yes{% else %}No{% endif %}</p>
+        </div>
+      </div>
+      <div class="level-item has-text-centered">
+        <div>
+          <p class="heading">Tenant</p>
+          <p class="title">{% if ((role//2)//2) is odd %}Yes{% else %}No{% endif %}</p>
+        </div>
+      </div>
+      <div class="level-item has-text-centered">
+        <div>
+          <p class="heading">Tenant Viewer</p>
+          <p class="title">{% if (((role//2)//2)//2) is odd %}Yes{% else %}No{% endif %}</p>
+        </div>
+      </div>
     </nav>
   </div>
 </div>

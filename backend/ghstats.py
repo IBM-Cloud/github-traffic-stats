@@ -355,8 +355,8 @@ def dashboard():
     res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
     # print res.text
     # print json.loads(res.text)['sessionId']
-    return render_template('dashboard.html',sessionInfo=json.loads(res.text))
-
+    # return render_template('dashboard.html',sessionInfo=json.loads(res.text))
+    return render_template('notavailable.html')
 
 # return the currently active user as csv file
 @app.route('/data/user.csv')
@@ -383,7 +383,7 @@ def generate_repostats():
                 yield ','.join(map(str,row)) + '\n'
         return Response(stream_with_context(generate()), mimetype='text/csv')
     else:
-        return render_template('notavailable.html')
+        return render_template('notavailable.html', message="You are not authorized.")
 
 @app.route('/data/repositories.csv')
 @auth.oidc_auth
