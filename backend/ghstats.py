@@ -239,8 +239,7 @@ def newtenant():
 @auth.oidc_auth
 def systemlog():
     if isSysMaintainer() or isAdministrator():
-        result = db.engine.execute("select tid, completed, numrepos, state from systemlog where completed >(current date - 21 days) order by completed desc, tid asc")
-        return render_template('systemlog.html',logs=result)
+        return render_template('systemlog.html',)
     else:
         return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
 
@@ -249,13 +248,8 @@ def systemlog():
 @auth.oidc_auth
 def repostatistics():
     if isTenant() or isTenantViewer() or isRepoViewer():
-        statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
-                    from v_repostats r, v_adminuserrepos v
-                    where r.rid=v.rid
-                    and v.email=? """
         # IDEA: expand to limit number of selected days, e.g., past 30 days
-        result = db.engine.execute(statstmt,flask.session['id_token']['email'])
-        return render_template('repostats.html',stats=result)
+        return render_template('repostats.html')
     else:
         return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
 
@@ -266,8 +260,7 @@ def repostatistics():
 @auth.oidc_auth
 def listrepos():
     if isTenant():
-        result = db.engine.execute("select rid,orgname, reponame from v_adminrepolist where email=? order by rid asc",flask.session['id_token']['email'])
-        return render_template('repolist.html',repos=result)
+        return render_template('repolist.html')
     else:
         return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
 
@@ -383,6 +376,54 @@ def generate_user():
         yield email + '\n'
     return Response(generate(flask.session['id_token']['email']), mimetype='text/csv')
 
+# return the repository statistics for the web page
+@app.route('/data/repostats.txt')
+@auth.oidc_auth
+def generate_data_repostats_txt():
+    if isTenant() or isTenantViewer():
+        def generate():
+            statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+                        from v_repostats r, v_adminuserrepos v
+                        where r.rid=v.rid
+                        and v.email=? """
+            result = db.engine.execute(statstmt,flask.session['id_token']['email'])
+            first=True
+            yield '{ "data": [\n'
+            for row in result:
+                if not first:
+                    yield ',\n'
+                else:
+                    first=False
+                yield '["'+'","'.join(map(str,row)) + '"]'
+            yield ']}'
+        return Response(stream_with_context(generate()), mimetype='text/utf-8')
+    else:
+        return render_template('notavailable.html', message="You are not authorized.")
+
+# return the system logs for the web page
+@app.route('/data/systemlogs.txt')
+@auth.oidc_auth
+def generate_data_systemlogs_txt():
+    if isAdministrator() or isSysMaintainer():
+        def generate():
+            logstmt="""select tid, completed, numrepos, state
+                        from systemlog where completed >(current date - ? days)
+                        order by completed desc, tid asc
+                        """
+            result = db.engine.execute(logstmt,30)
+            first=True
+            yield '{ "data": [\n'
+            for row in result:
+                if not first:
+                    yield ',\n'
+                else:
+                    first=False
+                yield '["'+'","'.join(map(str,row)) + '"]'
+            yield ']}'
+        return Response(stream_with_context(generate()), mimetype='text/utf-8')
+    else:
+        return render_template('notavailable.html', message="You are not authorized.")
+
 # return the repository statistics for the current user as csv file
 @app.route('/data/repostats.csv')
 @auth.oidc_auth
@@ -401,6 +442,27 @@ def generate_repostats():
     else:
         return render_template('notavailable.html', message="You are not authorized.")
 
+# Generate list of repositories for web page
+@app.route('/data/repositories.txt')
+@auth.oidc_auth
+def generate_data_repolist_txt():
+    def generate():
+        repolist_stmt="""select rid,orgname, reponame
+                         from v_adminrepolist
+                         where email=? order by rid asc"""
+        result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
+        first=True
+        yield '{ "data": [\n'
+        for row in result:
+            if not first:
+                yield ',\n'
+            else:
+                first=False
+            yield '["'+'","'.join(map(str,row)) + '"]'
+        yield ']}'
+    return Response(stream_with_context(generate()), mimetype='text/utf-8')
+
+# Export repositories as CSV file
 @app.route('/data/repositories.csv')
 @auth.oidc_auth
 def generate_repolist():

@@ -20,13 +20,6 @@
         <th>state</th>
         </thead>
         <tbody>
-      {%- for log in logs %}
-      <tr>
-        <td>{{ log.tid }}</td>
-        <td>{{ log.completed }}</td>
-        <td>{{ log.numrepos }}</td>
-        <td>{{ log.state }}</td>
-      {%- endfor %}
     </tbody>
     </table>
 </div>
@@ -36,6 +29,6 @@
 <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/datatables-bulma@1.0.1/js/dataTables.bulma.min.js"></script>
 <script>
-    $('#syslogs').DataTable();
+    $('#syslogs').DataTable({"ajax": "/data/systemlogs.txt"});
 </script>
 {% endblock %}

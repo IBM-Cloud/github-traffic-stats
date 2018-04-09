@@ -19,10 +19,10 @@
 bx wsk action create collectStats --kind python-jessie:3 ghstats.zip
 
 # Bind the service credentials to the action
-bx wsk service bind dashDB collectStats --instance ghstatsDB --key ghstatskey
+bx wsk service bind dashDB collectStats --instance ghstatsDB --keyname ghstatskey
 
 # Create a trigger for firing off daily at 6am
-bx wsk trigger create mydaily --feed /whisk.system/alarms/alarm --param cron "0 6 * * *" --param startDate "2018-03-21T00:00:00.000Z" --param stopDate "2018-12-31T00:00:00.000Z"
+bx wsk trigger create myDaily --feed /whisk.system/alarms/alarm --param cron "0 6 * * *" --param startDate "2018-03-21T00:00:00.000Z" --param stopDate "2018-12-31T00:00:00.000Z"
 
 # Create a rule to connect the trigger with the action
 bx wsk rule create myStatsRule myDaily collectStats

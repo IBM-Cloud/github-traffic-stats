@@ -24,19 +24,6 @@
         <th>clone uniques</th>
       </tr>
       </thead>
-      <tbody>
-      {%- for item in stats %}
-      <tr>
-        <td>{{ item.rid }}</td>
-        <td>{{ item.orgname }}</td>
-        <td>{{ item.reponame }}</td>
-        <td>{{ item.tdate }}</td>
-        <td>{{ item.viewcount }}</td>
-        <td>{{ item.vuniques }}</td>
-        <td>{{ item.clonecount }}</td>
-        <td>{{ item.cuniques }}</td>
-      </tr>
-      {%- endfor %}
     </tbody>
     </table>
 </div>
@@ -46,6 +33,6 @@
 <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/datatables-bulma@1.0.1/js/dataTables.bulma.min.js"></script>
 <script>
-    $('#repotraffic').DataTable({"order": [[ 3, "desc" ], [ 0, 'asc' ]]});
+    $('#repotraffic').DataTable({"ajax": "/data/repostats.txt", "order": [[ 3, "desc" ], [ 0, 'asc' ]]});
 </script>
 {% endblock %}

@@ -20,13 +20,7 @@
         <th>Repository</th>
       </thead>
       <tbody>
-      {%- for repo in repos %}
-      <tr id="{{ repo.rid }}">
-        <td>{{ repo.rid }}</td>
-        <td>{{ repo.orgname }}</td>
-        <td>{{ repo.reponame }}</td>
-      {%- endfor %}
-    </tbody>
+      </tbody>
     </table>
 
 
@@ -85,6 +79,6 @@
 <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/datatables-bulma@1.0.1/js/dataTables.bulma.min.js"></script>
 <script>
-    $('#repolist').DataTable();
+    $('#repolist').DataTable({"ajax": "/data/repositories.txt", "order": [ 0, 'asc' ]});
 </script>
 {% endblock %}
