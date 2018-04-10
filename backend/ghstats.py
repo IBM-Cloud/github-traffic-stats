@@ -1,7 +1,7 @@
-# Manage repositories to automatically collect Github traffic statistics.
+# Manage repositories to automatically collect GitHub traffic statistics.
 # Traffic data can be displayed, repositories added or deleted.
 #
-# Most actions are protected by using IBM Cloud App ID as an openID Connect
+# Most actions are protected by using IBM Cloud App ID as an OpenID Connect
 # authorization provider. Data is stored in a Db2 Warehouse on Cloud database.
 # The app is designed to be ready for multi-tenant use, but not all functionality
 # has been implemented yet. Right now, single-tenant operations are assumed.
@@ -72,7 +72,7 @@ app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['SQLALCHEMY_ECHO']=False
 
-# Configure access to App ID service and openID Connect client
+# Configure access to App ID service and OpenID Connect client
 provider_config={
      "issuer": "appid-oauth.ng.bluemix.net",
      "authorization_endpoint": appIDInfo['oauthServerUrl']+"/authorization",
@@ -85,7 +85,7 @@ client_info={
     "client_secret": appIDInfo['secret']
 }
 
-# Initialize openID Connect client
+# Initialize OpenID Connect client
 auth = OIDCAuthentication(app, provider_configuration_info=provider_config, client_registration_info=client_info,userinfo_endpoint_method=None)
 
 # Initialize SQLAlchemy for our database

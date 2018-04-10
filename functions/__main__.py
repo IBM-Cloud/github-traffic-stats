@@ -1,7 +1,7 @@
 #######
-####### Github traffic statistics
+####### GitHub traffic statistics
 #######
-# Program or IBM Cloud Function to collect Github view and clone traffic
+# Program or IBM Cloud Function to collect GitHub view and clone traffic
 # and store that data in a relational database, namely Db2.
 #
 # (C) 2018 IBM
@@ -57,7 +57,7 @@ def mergeCloneData(cloneStats, rid):
 
 # Overall flow:
 # - loop over users
-#   - log in to Github as that current user
+#   - log in to GitHub as that current user
 #   - retrieve repos for that current user, loop the repos
 #     - for each repo fetch stats
 #     - merge traffic data into table
@@ -86,7 +86,7 @@ def main(args):
         tenant=ibm_db.fetch_assoc(allTenants)
         while tenant != False:
             # go over all repos managed by that user and fetch traffic data
-            # first, login to Github as that user
+            # first, login to GitHub as that user
             gh = github.GitHub(username=tenant["GHUSER"],  access_token=tenant["GHTOKEN"])
 
             userRepoCount=0

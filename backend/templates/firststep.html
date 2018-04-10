@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% block title %}
-<title>First step - Github Traffic Analytics</title>
+<title>First step - GitHub Traffic Analytics</title>
 {% endblock %}
 {% block body %}
 
@@ -9,23 +9,23 @@
 <p>
   Initialize the application and its database.
 
-  Gather information on the Github user, its access token.
+  Gather information on the GitHub user, its access token.
 
   <form action="/admin/secondstep" name="newuser" method="post">
     <div class="field">
       <label class="label">Name</label>
       <div class="control">
-        <input class="input" type="text" placeholder="User name" name="username">
+        <input class="input" type="text" placeholder="Your name" name="username">
       </div>
     </div>
     <div class="field">
-      <label class="label">Github Username</label>
+      <label class="label">GitHub Username</label>
       <div class="control">
-        <input class="input" type="text" placeholder="username"  name="ghuser">
+        <input class="input" type="text" placeholder="GitHub username"  name="ghuser">
       </div>
     </div>
     <div class="field">
-      <label class="label">Github access token</label>
+      <label class="label">GitHub access token</label>
       <div class="control">
         <input class="input" type="password" placeholder="token" name="ghtoken">
       </div>
