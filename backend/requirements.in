@@ -1,6 +1,7 @@
 # requirements.in
 Flask
 Flask-SQLAlchemy
+flask_httpauth
 githubpy
 flask_pyoidc
 ibm_db_sa

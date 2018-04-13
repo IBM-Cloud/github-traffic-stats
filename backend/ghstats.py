@@ -12,13 +12,16 @@
 # (C) 2018 by IBM
 
 import flask, os, json, datetime, re, requests
+from base64 import b64encode
 import github # githubpy module
 from flask import Flask, jsonify,redirect,request,render_template, url_for, Response, stream_with_context
-
+from flask_httpauth import HTTPBasicAuth
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
 from sqlalchemy import Column, Table, Integer, String, select, ForeignKey
 from sqlalchemy.orm import relationship, backref
 from flask_sqlalchemy import SQLAlchemy
+from itsdangerous import (TimedJSONWebSignatureSerializer
+                          as Serializer, BadSignature, SignatureExpired)
 
 
 # monkey patch for now, so that Flask-pyoidc works with App ID
@@ -87,6 +90,8 @@ client_info={
 
 # Initialize openID Connect client
 auth = OIDCAuthentication(app, provider_configuration_info=provider_config, client_registration_info=client_info,userinfo_endpoint_method=None)
+# Initialize BasicAuth
+basicauth = HTTPBasicAuth()
 
 # Initialize SQLAlchemy for our database
 db = SQLAlchemy(app, session_options={'autocommit': True})
@@ -353,18 +358,75 @@ def deleterepo():
 
 
 
+@app.route('/api/v1/dashboard_session', methods=['POST'])
+@auth.oidc_auth
+def dashboard_session():
+    expiration=3600
+    s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
+    token=s.dumps({'id': flask.session['id_token']['email']})
+    enctoken=b64encode(token.decode('ascii')+":Iamatoken").decode("ascii")
+    DDEcsvStats = {
+        "xsd": "https://ibm.com/daas/module/1.0/module.xsd",
+        "source": { "id": "Repostats",
+                    "srcUrl": { "sourceUrl": "http://github-traffic-stats.mybluemix.net/api/v1/data/repositorystats.csv", "mimeType": "text/csv",
+                                "property": [
+                                        { "name": "separator", "value": ", " },
+                                        { "name": "ColumnNamesLine", "value": "true" },
+                                        { "name": "headers", "value": [{"name": "Authorization", "value": "Basic "+enctoken}]}
+                                    ]
+                                }
+                  },
+        "table": { "name": "repositorystats", "description": "Traffic data for repositories",
+              "column": [
+                    { "name": "RID", "description": "repository ID", "datatype": "INTEGER", "nullable": "false", "label": "Repository ID", "usage": "identifier", "regularAggregate": "countDistinct"},
+                    { "name": "TDATE", "description": "traffic date", "datatype": "DATE", "nullable": "false", "label": "traffic date", "usage": "identifier", "regularAggregate": "countDistinct", "taxonomyFamily": "cDate" },
+                    { "name": "VIEWCOUNT", "datatype": "INTEGER", "nullable": "false", "label": "count of views", "usage": "fact", "regularAggregate": "total" },
+                    { "name": "VUNIQUES", "datatype": "INTEGER", "nullable": "false", "label": "unique views", "usage": "fact", "regularAggregate": "total" },
+                    { "name": "CLONECOUNT", "datatype": "INTEGER", "nullable": "false", "label": "count of clones", "usage": "fact", "regularAggregate": "total" },
+                    { "name": "CUNIQUES", "datatype": "INTEGER", "nullable": "false", "label": "unique counts", "usage": "fact", "regularAggregate": "total" } ]
+                },
+        "label": "Repository Traffic Data",
+        "identifier": "Repostats" }
+    DDEcsvRepolist = {
+        "xsd": "https://ibm.com/daas/module/1.0/module.xsd",
+        "source": { "id": "Repolist",
+                "srcUrl": { "sourceUrl": "http://github-traffic-stats.mybluemix.net/api/v1/data/repositories.csv", "mimeType": "text/csv",
+                            "property": [
+                                    { "name": "separator", "value": ", " },
+                                    { "name": "ColumnNamesLine", "value": "true" },
+                                    { "name": "headers", "value": [{"name": "Authorization", "value": "Basic "+enctoken}]}
+                                ]
+                            }
+                  },
+        "table": { "name": "repositorylist", "description": "List of repositories",
+          "column": [
+                { "name": "RID", "description": "repository ID", "datatype": "INTEGER", "nullable": "false", "label": "repository ID", "usage": "identifier", "regularAggregate": "countDistinct" },
+                { "name": "ORGNAME", "description": "Organization or user", "datatype": "VARCHAR(255)", "nullable": "false", "label": "organization or user", "usage": "identifier", "regularAggregate": "countDistinct" },
+                { "name": "REPONAME", "description": "repository name","datatype": "VARCHAR(255)", "nullable": "false", "label": "repository name", "usage": "fact", "regularAggregate": "total" } ]
+            },
+        "label": "Repositories",
+        "identifier": "Repolist" }
+
+
+    #body={ "expiresIn": 3600, "webDomain" : "https://myportal.mybluemix.net" }
+    body={ "expiresIn": expiration, "webDomain" : request.url_root }
+    ddeUri=DDE['api_endpoint_url']+'v1/session'
+    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
+    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats, csvRepos=DDEcsvRepolist), 201
+
+
 @app.route('/repos/dashboard')
 @auth.oidc_auth
 def dashboard():
-    # print request.url_root
+    print request.url_root
     #body={ "expiresIn": 3600, "webDomain" : "https://myportal.mybluemix.net" }
-    body={ "expiresIn": 3600, "webDomain" : request.url_root }
+    #body={ "expiresIn": 3600, "webDomain" : request.url_root }
     # print body
-    ddeUri=DDE['api_endpoint_url']+'v1/session'
-    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
+    #ddeUri=DDE['api_endpoint_url']+'v1/session'
+    #res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
     # print res.text
     # print json.loads(res.text)['sessionId']
-    return render_template('dashboard.html',sessionInfo=json.loads(res.text))
+    return render_template('dashboard2.html')
     #return render_template('notavailable.html')
 
 # return the currently active user as csv file
@@ -380,25 +442,23 @@ def generate_user():
 @app.route('/data/repostats.txt')
 @auth.oidc_auth
 def generate_data_repostats_txt():
-    if isTenant() or isTenantViewer():
-        def generate():
-            statstmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+    def generate():
+        yield '{ "data": [\n'
+        if isTenant() or isTenantViewer() or isRepoViewer():
+            statsFullOrgStmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
                         from v_repostats r, v_adminuserrepos v
                         where r.rid=v.rid
                         and v.email=? """
-            result = db.engine.execute(statstmt,flask.session['id_token']['email'])
+            result = db.engine.execute(statsFullOrgStmt,flask.session['id_token']['email'])
             first=True
-            yield '{ "data": [\n'
             for row in result:
                 if not first:
                     yield ',\n'
                 else:
                     first=False
                 yield '["'+'","'.join(map(str,row)) + '"]'
-            yield ']}'
-        return Response(stream_with_context(generate()), mimetype='text/utf-8')
-    else:
-        return render_template('notavailable.html', message="You are not authorized.")
+        yield ']}'
+    return Response(stream_with_context(generate()), mimetype='text/utf-8')
 
 # return the system logs for the web page
 @app.route('/data/systemlogs.txt')
@@ -424,32 +484,67 @@ def generate_data_systemlogs_txt():
     else:
         return render_template('notavailable.html', message="You are not authorized.")
 
+
+
+# Common statement to generate statistics
+statstmt="""select r.rid,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+            from v_repostats r, v_adminuserrepos v
+            where r.rid=v.rid
+            and v.email=? """
+
 # return the repository statistics for the current user as csv file
 @app.route('/data/repostats.csv')
 @auth.oidc_auth
 def generate_repostats():
-    if isTenant() or isTenantViewer():
-        def generate():
-            statstmt="""select r.rid,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
-                        from v_repostats r, v_adminuserrepos v
-                        where r.rid=v.rid
-                        and v.email=? """
+    def generate():
+        yield "RID,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
+        if isTenant() or isTenantViewer() or isRepoViewer():
             result = db.engine.execute(statstmt,flask.session['id_token']['email'])
-            yield "RID,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
             for row in result:
                 yield ','.join(map(str,row)) + '\n'
-        return Response(stream_with_context(generate()), mimetype='text/csv')
-    else:
-        return render_template('notavailable.html', message="You are not authorized.")
+    return Response(stream_with_context(generate()), mimetype='text/csv')
+
+@app.route('/api/v1/data/repositorystats.csv')
+@basicauth.login_required
+def api_generate_repostats():
+    def generate():
+        yield "RID,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
+        result = db.engine.execute(statstmt,flask.g.email)
+        for row in result:
+            yield ','.join(map(str,row)) + '\n'
+    return Response(stream_with_context(generate()), mimetype='text/csv')
+    resp = make_response(render_template('list.html', entries=entries))
+
+
+# Handle password verification our way:
+# Check that the token is valid and ignore the password
+@basicauth.verify_password
+def verify_password(token, nopassword):
+    # Need the serializer
+    s = Serializer(app.config['SECRET_KEY'])
+    try:
+        # Ok, check for a valid token and extract the data
+        data = s.loads(token)
+    except SignatureExpired:
+        # valid token, but expired
+        return False
+    except BadSignature:
+        # invalid token
+        return False
+    # all well, set the email for use in the csv generator functions
+    flask.g.email = data['id']
+    return True
+
+# Common statement to generate list of repositories
+repolist_stmt="""select rid,orgname, reponame
+                 from v_adminrepolist
+                 where email=? order by rid asc"""
 
 # Generate list of repositories for web page
 @app.route('/data/repositories.txt')
 @auth.oidc_auth
 def generate_data_repolist_txt():
     def generate():
-        repolist_stmt="""select rid,orgname, reponame
-                         from v_adminrepolist
-                         where email=? order by rid asc"""
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
         first=True
         yield '{ "data": [\n'
@@ -467,10 +562,18 @@ def generate_data_repolist_txt():
 @auth.oidc_auth
 def generate_repolist():
     def generate():
-        repolist_stmt="""select rid,orgname, reponame
-                         from v_adminrepolist
-                         where email=? order by rid asc"""
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
+        yield "RID,ORGNAME,REPONAME\n"
+        for row in result:
+            yield ','.join(map(str,row)) + '\n'
+    return Response(stream_with_context(generate()), mimetype='text/csv')
+
+# Export repositories as CSV file
+@app.route('/api/v1/data/repositories.csv')
+@basicauth.login_required
+def api_generate_repolist():
+    def generate():
+        result = db.engine.execute(repolist_stmt,flask.g.email)
         yield "RID,ORGNAME,REPONAME\n"
         for row in result:
             yield ','.join(map(str,row)) + '\n'

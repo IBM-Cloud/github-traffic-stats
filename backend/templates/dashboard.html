@@ -1,0 +1,14 @@
+<html>
+<body>
+
+    <h2 class="title is-2">Dashboard</h2>
+    <div id="ddeDashboard">
+
+    </div>
+<script src="https://dde-us-south.analytics.ibm.com/daas/CognosApi.js"></script>
+<script src="{{ url_for('static', filename='dashboard.js')}}"></script>
+<script>
+  window.onload=newDDESession();
+</script>
+</body>
+</html>
