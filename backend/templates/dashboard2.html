@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}
+<title>Analytics Dashboard</title>
+{% endblock %}
+
+{% block body %}
+<div id="main" class="container">
+    <h2 class="title is-2">Dashboard</h2>
+    <section class="hero is-fullheight">
+    <div id="ddeDashboard" class="hero-body"></div>
+  </section>
+</div>
+
+{% endblock %}
+{% block extra_javascripts %}
+<script src="https://dde-us-south.analytics.ibm.com/daas/CognosApi.js"></script>
+<script src="{{ url_for('static', filename='dashboard.js')}}"></script>
+<script>
+  window.onload=newDDESession()
+</script>
+{% endblock %}
