@@ -17,6 +17,8 @@ Important files in the **functions** directory:
 * [__main__.py](functions/__main__.py): Code for Cloud Functions action, written in Python, uses the Github v3 API
 * ghstats.zip: Zip archive with the action code and the githubpy module included. The zip archive is used to create the action.
 
+The database schema, defined in [database.sql](backend/database.sql), can be graphically represented as:
+![](dbschema.png)
 
 # License
 See [LICENSE](LICENSE) for license information.
