@@ -258,6 +258,17 @@ def repostatistics():
     else:
         return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
 
+# return page with the repository stats
+@app.route('/repos/statsweekly')
+@auth.oidc_auth
+def repostatistics_weekly():
+    if isTenant() or isTenantViewer() or isRepoViewer():
+        # IDEA: expand to limit number of selected days, e.g., past 30 days
+        return render_template('repostatsweek.html')
+    else:
+        return render_template('notavailable.html', message="You are not authorized.") # should go to error or info page
+
+
 
 # Show list of managed repositories
 @app.route('/repos')
@@ -357,10 +368,56 @@ def deleterepo():
         return jsonify(message="Error: no repository deleted") # should go to error or info page
 
 
-
-@app.route('/api/v1/dashboard_session', methods=['POST'])
+# Initialize session to display a canned DDE dashboard
+@app.route('/api/v1/dashboard_display_session', methods=['POST'])
 @auth.oidc_auth
-def dashboard_session():
+def dashboard_display_session():
+    # For DDE-based data access we are going to use token-based Basic Auth
+    # In the following, encode the session user's email into a time-limited
+    # access token.
+
+    # 1 hour expiration time for data access
+    expiration=3600
+    # New token generator, initialize with expiration time
+    s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
+    # generate a new token based on the email address
+    token=s.dumps({'id': flask.session['id_token']['email']})
+    # encode it for Basic Auth usage
+    enctoken=b64encode(token.decode('ascii')+":Iamatoken").decode("ascii")
+
+    # Load the dashboard specification from JSON file - this could be stored in
+    # the database, too.
+    with open('dashboard.json') as dashboardFile:
+        # load JSON data from file, this is the dashboard spec
+        dboard=json.load(dashboardFile)
+
+    # This looks ugly and, yes,  it is... :)
+    # Replace the value for Basic Auth within the dashboard specification
+    [item for item in dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['property']
+        if item['name']=='headers'][0]['value'][0]['value']="Basic "+enctoken
+    # Replace the value for sourceUrl within the dashboard specification
+    dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['sourceUrl']=request.url_root+"api/v1/data/repositorystats.csv"
+
+    # For debugging - obtain the changed value for Authorization and print it:
+    # vals=[item for item in dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['property']
+    #         if item['name']=='headers'][0]['value'][0]['value']
+    # print vals
+    # dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['sourceUrl']
+
+
+    # Configure result for DDE initialization
+    body={ "expiresIn": expiration, "webDomain" : request.url_root }
+    ddeUri=DDE['api_endpoint_url']+'v1/session'
+    # Obtain new session code from DDE
+    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
+    # All data in place, return it back to the client
+    return jsonify(sessionData=json.loads(res.text), dashboard=dboard), 201
+
+
+# Initialize session to display a canned DDE dashboard
+@app.route('/api/v1/dashboard_edit_session', methods=['POST'])
+@auth.oidc_auth
+def dashboard_edit_session():
     expiration=3600
     s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
     token=s.dumps({'id': flask.session['id_token']['email']})
@@ -368,7 +425,7 @@ def dashboard_session():
     DDEcsvStats = {
         "xsd": "https://ibm.com/daas/module/1.0/module.xsd",
         "source": { "id": "Repostats",
-                    "srcUrl": { "sourceUrl": "http://github-traffic-stats.mybluemix.net/api/v1/data/repositorystats.csv", "mimeType": "text/csv",
+                    "srcUrl": { "sourceUrl": request.url_root+"api/v1/data/repositorystats.csv", "mimeType": "text/csv",
                                 "property": [
                                         { "name": "separator", "value": ", " },
                                         { "name": "ColumnNamesLine", "value": "true" },
@@ -379,6 +436,8 @@ def dashboard_session():
         "table": { "name": "repositorystats", "description": "Traffic data for repositories",
               "column": [
                     { "name": "RID", "description": "repository ID", "datatype": "INTEGER", "nullable": "false", "label": "Repository ID", "usage": "identifier", "regularAggregate": "countDistinct"},
+                    { "name": "ORGNAME", "description": "Organization or user", "datatype": "VARCHAR(255)", "nullable": "false", "label": "organization or user", "usage": "identifier", "regularAggregate": "countDistinct" },
+                    { "name": "REPONAME", "description": "repository name","datatype": "VARCHAR(255)", "nullable": "false", "label": "repository name", "usage": "fact", "regularAggregate": "total" },
                     { "name": "TDATE", "description": "traffic date", "datatype": "DATE", "nullable": "false", "label": "traffic date", "usage": "identifier", "regularAggregate": "countDistinct", "taxonomyFamily": "cDate" },
                     { "name": "VIEWCOUNT", "datatype": "INTEGER", "nullable": "false", "label": "count of views", "usage": "fact", "regularAggregate": "total" },
                     { "name": "VUNIQUES", "datatype": "INTEGER", "nullable": "false", "label": "unique views", "usage": "fact", "regularAggregate": "total" },
@@ -387,47 +446,36 @@ def dashboard_session():
                 },
         "label": "Repository Traffic Data",
         "identifier": "Repostats" }
-    DDEcsvRepolist = {
-        "xsd": "https://ibm.com/daas/module/1.0/module.xsd",
-        "source": { "id": "Repolist",
-                "srcUrl": { "sourceUrl": "http://github-traffic-stats.mybluemix.net/api/v1/data/repositories.csv", "mimeType": "text/csv",
-                            "property": [
-                                    { "name": "separator", "value": ", " },
-                                    { "name": "ColumnNamesLine", "value": "true" },
-                                    { "name": "headers", "value": [{"name": "Authorization", "value": "Basic "+enctoken}]}
-                                ]
-                            }
-                  },
-        "table": { "name": "repositorylist", "description": "List of repositories",
-          "column": [
-                { "name": "RID", "description": "repository ID", "datatype": "INTEGER", "nullable": "false", "label": "repository ID", "usage": "identifier", "regularAggregate": "countDistinct" },
-                { "name": "ORGNAME", "description": "Organization or user", "datatype": "VARCHAR(255)", "nullable": "false", "label": "organization or user", "usage": "identifier", "regularAggregate": "countDistinct" },
-                { "name": "REPONAME", "description": "repository name","datatype": "VARCHAR(255)", "nullable": "false", "label": "repository name", "usage": "fact", "regularAggregate": "total" } ]
-            },
-        "label": "Repositories",
-        "identifier": "Repolist" }
 
 
-    #body={ "expiresIn": 3600, "webDomain" : "https://myportal.mybluemix.net" }
     body={ "expiresIn": expiration, "webDomain" : request.url_root }
     ddeUri=DDE['api_endpoint_url']+'v1/session'
+    # Obtain new session code from DDE
     res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
-    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats, csvRepos=DDEcsvRepolist), 201
+
+    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats), 201
 
 
+
+# Display a canned DDE dashboard
 @app.route('/repos/dashboard')
 @auth.oidc_auth
 def dashboard():
-    print request.url_root
-    #body={ "expiresIn": 3600, "webDomain" : "https://myportal.mybluemix.net" }
-    #body={ "expiresIn": 3600, "webDomain" : request.url_root }
-    # print body
-    #ddeUri=DDE['api_endpoint_url']+'v1/session'
-    #res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
-    # print res.text
-    # print json.loads(res.text)['sessionId']
-    return render_template('dashboard2.html')
-    #return render_template('notavailable.html')
+    if isTenant() or isTenantViewer() or isRepoViewer():
+        return render_template('dashboard.html')
+    else:
+        return render_template('notavailable.html', message="You are not authorized.")
+
+# Create a new DDE dashboard
+@app.route('/repos/newdashboard')
+@auth.oidc_auth
+def new_dashboard():
+    if isTenant():
+        return render_template('dashboardnew.html')
+    else:
+        return render_template('notavailable.html', message="You are not authorized.")
+
+
 
 # return the currently active user as csv file
 @app.route('/data/user.csv')
@@ -438,6 +486,37 @@ def generate_user():
         yield email + '\n'
     return Response(generate(flask.session['id_token']['email']), mimetype='text/csv')
 
+
+# Common statement to generate statistics
+statstmt="""select r.rid,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+            from v_repostats r, v_adminuserrepos v
+            where r.rid=v.rid
+            and v.email=? """
+
+statsFullOrgStmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
+                    from v_repostats r, v_adminuserrepos v
+                    where r.rid=v.rid
+                    and v.email=? """
+
+logstmt="""select tid, completed, numrepos, state
+           from systemlog where completed >(current date - ? days)
+           order by completed desc, tid asc
+           """
+# Common statement to generate list of repositories
+repolist_stmt="""select rid,orgname, reponame
+                 from v_adminrepolist
+                 where email=? order by rid asc"""
+
+# Traffic by work week
+statsWorkWeek="""select r.rid,orgname,reponame,varchar_format(tdate,'YYYY-IW') as workweek,
+                 sum(viewcount) as viewcount, sum(vuniques) as vuniques, sum(clonecount) as clonecount, sum(cuniques) as cuniques
+                 from v_repostats r, v_adminuserrepos v
+                 where r.rid=v.rid
+                 and v.email=?
+                 group by r.rid, varchar_format(tdate,'YYYY-IW'), orgname, reponame"""
+
+
+
 # return the repository statistics for the web page
 @app.route('/data/repostats.txt')
 @auth.oidc_auth
@@ -445,10 +524,6 @@ def generate_data_repostats_txt():
     def generate():
         yield '{ "data": [\n'
         if isTenant() or isTenantViewer() or isRepoViewer():
-            statsFullOrgStmt="""select r.rid,r.orgname,r.reponame,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
-                        from v_repostats r, v_adminuserrepos v
-                        where r.rid=v.rid
-                        and v.email=? """
             result = db.engine.execute(statsFullOrgStmt,flask.session['id_token']['email'])
             first=True
             for row in result:
@@ -460,16 +535,31 @@ def generate_data_repostats_txt():
         yield ']}'
     return Response(stream_with_context(generate()), mimetype='text/utf-8')
 
+# return the repository statistics for the web page
+@app.route('/data/repostatsWorkWeek.txt')
+@auth.oidc_auth
+def generate_data_repostatsWorkWeek_txt():
+    def generate():
+        yield '{ "data": [\n'
+        if isTenant() or isTenantViewer() or isRepoViewer():
+            result = db.engine.execute(statsWorkWeek,flask.session['id_token']['email'])
+            first=True
+            for row in result:
+                if not first:
+                    yield ',\n'
+                else:
+                    first=False
+                yield '["'+'","'.join(map(str,row)) + '"]'
+        yield ']}'
+    return Response(stream_with_context(generate()), mimetype='text/utf-8')
+
+
 # return the system logs for the web page
 @app.route('/data/systemlogs.txt')
 @auth.oidc_auth
 def generate_data_systemlogs_txt():
     if isAdministrator() or isSysMaintainer():
         def generate():
-            logstmt="""select tid, completed, numrepos, state
-                        from systemlog where completed >(current date - ? days)
-                        order by completed desc, tid asc
-                        """
             result = db.engine.execute(logstmt,30)
             first=True
             yield '{ "data": [\n'
@@ -484,14 +574,6 @@ def generate_data_systemlogs_txt():
     else:
         return render_template('notavailable.html', message="You are not authorized.")
 
-
-
-# Common statement to generate statistics
-statstmt="""select r.rid,r.tdate,r.viewcount,r.vuniques,r.clonecount,r.cuniques
-            from v_repostats r, v_adminuserrepos v
-            where r.rid=v.rid
-            and v.email=? """
-
 # return the repository statistics for the current user as csv file
 @app.route('/data/repostats.csv')
 @auth.oidc_auth
@@ -504,12 +586,13 @@ def generate_repostats():
                 yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
 
+# Return statistics for use in DDE
 @app.route('/api/v1/data/repositorystats.csv')
 @basicauth.login_required
 def api_generate_repostats():
     def generate():
-        yield "RID,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
-        result = db.engine.execute(statstmt,flask.g.email)
+        yield "RID,ORGNAME,REPONAME,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
+        result = db.engine.execute(statsFullOrgStmt,flask.g.email)
         for row in result:
             yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
@@ -534,11 +617,6 @@ def verify_password(token, nopassword):
     # all well, set the email for use in the csv generator functions
     flask.g.email = data['id']
     return True
-
-# Common statement to generate list of repositories
-repolist_stmt="""select rid,orgname, reponame
-                 from v_adminrepolist
-                 where email=? order by rid asc"""
 
 # Generate list of repositories for web page
 @app.route('/data/repositories.txt')

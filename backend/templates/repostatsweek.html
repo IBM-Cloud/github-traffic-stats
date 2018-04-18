@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block title %}
+<title>Traffic Data - Github Traffic Analytics</title>
+{% endblock %}
+
+{% block extra_stylesheets %}
+  <link href="https://cdn.jsdelivr.net/npm/datatables-bulma@1.0.1/css/dataTables.bulma.min.css" rel="stylesheet">
+  <link href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.css" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+<div id="main" class="container">
+    <h2 class="title is-2">Repository Traffic Data - Weekly</h2>
+    <table id="repotraffic" class="table table-bordered table is-striped" summary="Table with repository views based on work week">
+      <thead>
+      <tr>
+        <th>#</th>
+        <th>Org</th>
+        <th>Repo</th>
+        <th>Week</th>
+        <th>viewcount</th>
+        <th>view uniques</th>
+        <th>clonecount</th>
+        <th>clone uniques</th>
+      </tr>
+      </thead>
+    </tbody>
+    </table>
+</div>
+{% endblock %}
+{% block extra_javascripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/datatables-bulma@1.0.1/js/dataTables.bulma.min.js"></script>
+<script>
+    $('#repotraffic').DataTable({"ajax": "/data/repostatsWorkWeek.txt", "order": [[ 3, "desc" ], [ 0, 'asc' ]]});
+</script>
+{% endblock %}

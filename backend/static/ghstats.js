@@ -1,3 +1,7 @@
+// Callback functions to add or delete a repository from the database
+// Written by Henrik Loeser, hloeser@de.ibm.com
+
+// Add a repository and display returned message
 function addRepo() {
   var xhttp;
   var orgname = document.forms['newrepo'].elements['orgname'].value;
@@ -22,6 +26,7 @@ function addRepo() {
   return false;
 }
 
+// Delete an existing repository by ID
 function deleteRepo() {
   var xhttp;
   var repoid = document.forms['deleterepo'].elements['repoid'].value;
