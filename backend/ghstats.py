@@ -20,17 +20,24 @@ from flask_pyoidc.flask_pyoidc import OIDCAuthentication
 from sqlalchemy import Column, Table, Integer, String, select, ForeignKey
 from sqlalchemy.orm import relationship, backref
 from flask_sqlalchemy import SQLAlchemy
+# Authentication for DDE, based on token
 from itsdangerous import (TimedJSONWebSignatureSerializer
                           as Serializer, BadSignature, SignatureExpired)
 
 
 # monkey patch for now, so that Flask-pyoidc works with App ID
+# import the patched function and overwrite the existing one in the module
 import mypatch
 OIDCAuthentication._handle_authentication_response=mypatch.my_handle_authentication_response
 
+
+# Initialize Flask app
 app = Flask(__name__)
 
 # Check if we are in a Cloud Foundry environment, i.e., on IBM Cloud
+# If we are on IBM Cloud, obtain the credentials from the environment.
+# Else, read them from file.
+# Thereafter, set up the services and module with the obtained credentials.
 if 'VCAP_SERVICES' in os.environ:
    vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
 
@@ -43,9 +50,9 @@ if 'VCAP_SERVICES' in os.environ:
    # Configure access to DDE service
    DDE=vcapEnv['dynamic-dashboard-embedded'][0]['credentials']
 
-   # See http://flask.pocoo.org/docs/0.12/config/
+   # Update Flask configuration
    app.config.update({'SERVER_NAME': json.loads(os.environ['VCAP_APPLICATION'])['uris'][0],
-                      'SECRET_KEY': 'my_secret_key',
+                      'SECRET_KEY': 'my_not_so_dirty_secret_key',
                       'PREFERRED_URL_SCHEME': 'https',
                       'DEBUG': False})
 
@@ -68,14 +75,14 @@ else:
                       'PERMANENT_SESSION_LIFETIME': 2592000, # session time in seconds (30 days)
                       'DEBUG': True})
 
+
 # General setup based on the obtained configuration
-#
 # Configure database access
 app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['SQLALCHEMY_ECHO']=False
 
-# Configure access to App ID service and OpenID Connect client
+# Configure access to App ID service for the OpenID Connect client
 provider_config={
      "issuer": "appid-oauth.ng.bluemix.net",
      "authorization_endpoint": appIDInfo['oauthServerUrl']+"/authorization",
@@ -90,7 +97,7 @@ client_info={
 
 # Initialize OpenID Connect client
 auth = OIDCAuthentication(app, provider_configuration_info=provider_config, client_registration_info=client_info,userinfo_endpoint_method=None)
-# Initialize BasicAuth
+# Initialize BasicAuth, needed for token access to data
 basicauth = HTTPBasicAuth()
 
 # Initialize SQLAlchemy for our database
@@ -418,10 +425,16 @@ def dashboard_display_session():
 @app.route('/api/v1/dashboard_edit_session', methods=['POST'])
 @auth.oidc_auth
 def dashboard_edit_session():
+    # For DDE-based data access we are going to use token-based Basic Auth
+    # In the following, encode the session user's email into a time-limited
+    # access token.
     expiration=3600
     s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
     token=s.dumps({'id': flask.session['id_token']['email']})
     enctoken=b64encode(token.decode('ascii')+":Iamatoken").decode("ascii")
+
+    # Define a CSV data source for DDEcsvStats
+    # The sourceUrl and the authentication are dynamically generated
     DDEcsvStats = {
         "xsd": "https://ibm.com/daas/module/1.0/module.xsd",
         "source": { "id": "Repostats",
@@ -447,12 +460,12 @@ def dashboard_edit_session():
         "label": "Repository Traffic Data",
         "identifier": "Repostats" }
 
-
+    # Setup request to DDE for new session code
     body={ "expiresIn": expiration, "webDomain" : request.url_root }
     ddeUri=DDE['api_endpoint_url']+'v1/session'
     # Obtain new session code from DDE
     res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
-
+    # Ok, return the session code and CSV data source information as JSON
     return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats), 201
 
 
@@ -517,7 +530,7 @@ statsWorkWeek="""select r.rid,orgname,reponame,varchar_format(tdate,'YYYY-IW') a
 
 
 
-# return the repository statistics for the web page
+# return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostats.txt')
 @auth.oidc_auth
 def generate_data_repostats_txt():
@@ -535,7 +548,7 @@ def generate_data_repostats_txt():
         yield ']}'
     return Response(stream_with_context(generate()), mimetype='text/utf-8')
 
-# return the repository statistics for the web page
+# return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostatsWorkWeek.txt')
 @auth.oidc_auth
 def generate_data_repostatsWorkWeek_txt():
@@ -554,7 +567,7 @@ def generate_data_repostatsWorkWeek_txt():
     return Response(stream_with_context(generate()), mimetype='text/utf-8')
 
 
-# return the system logs for the web page
+# return the system logs for the web page, dynamically loaded
 @app.route('/data/systemlogs.txt')
 @auth.oidc_auth
 def generate_data_systemlogs_txt():
@@ -618,7 +631,7 @@ def verify_password(token, nopassword):
     flask.g.email = data['id']
     return True
 
-# Generate list of repositories for web page
+# Generate list of repositories for web page, dynamically loaded
 @app.route('/data/repositories.txt')
 @auth.oidc_auth
 def generate_data_repolist_txt():
@@ -647,6 +660,7 @@ def generate_repolist():
     return Response(stream_with_context(generate()), mimetype='text/csv')
 
 # Export repositories as CSV file
+# CURRENTLY NOT IN USE, but could be used by DDE dashboard
 @app.route('/api/v1/data/repositories.csv')
 @basicauth.login_required
 def api_generate_repolist():
