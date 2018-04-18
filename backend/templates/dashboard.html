@@ -1,14 +1,31 @@
-<html>
-<body>
+{% extends "layout.html" %}
+{% block title %}
+<title>GitHub Traffic Analytics - Dashboard</title>
+{% endblock %}
 
-    <h2 class="title is-2">Dashboard</h2>
-    <div id="ddeDashboard">
-
+{% block body %}
+<div class="tile is-ancestor">
+  <div class="tile is-2 is-parent">
+    <div class="tile is-child box">
+      <p class="title">Dashboard</p>
+        <p>Daily statistics for all repositories.</p>
     </div>
+  </div>
+  <div class="tile is-parent">
+    <div class="tile is-child box">
+      <figure class="image is-4by3">
+            <img id="ddeDashboard">
+      </figure>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_javascripts %}
 <script src="https://dde-us-south.analytics.ibm.com/daas/CognosApi.js"></script>
 <script src="{{ url_for('static', filename='dashboard.js')}}"></script>
+<script src="{{ url_for('static', filename='jquery-3.3.1.min.js')}}"></script>
 <script>
-  window.onload=newDDESession();
+  window.onload=cannedDDESession();
 </script>
-</body>
-</html>
+{% endblock %}

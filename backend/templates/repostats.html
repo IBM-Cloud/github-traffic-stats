@@ -4,8 +4,8 @@
 {% endblock %}
 
 {% block extra_stylesheets %}
-  <link href="https://cdn.jsdelivr.net/npm/datatables-bulma@1.0.1/css/dataTables.bulma.min.css" rel="stylesheet">
-  <link href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='dataTables.bulma.min.css')}}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='jquery.dataTables.css')}}" rel="stylesheet">
 {% endblock %}
 
 {% block body %}
@@ -29,9 +29,9 @@
 </div>
 {% endblock %}
 {% block extra_javascripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
-<script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/datatables-bulma@1.0.1/js/dataTables.bulma.min.js"></script>
+<script src="{{ url_for('static', filename='jquery-3.3.1.min.js')}}"></script>
+<script src="{{ url_for('static', filename='jquery.dataTables.min.js')}}"></script>
+<script src="{{ url_for('static', filename='dataTables.bulma.min.js')}}"></script>
 <script>
     $('#repotraffic').DataTable({"ajax": "/data/repostats.txt", "order": [[ 3, "desc" ], [ 0, 'asc' ]]});
 </script>
