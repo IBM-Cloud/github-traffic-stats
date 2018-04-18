@@ -1,0 +1,55 @@
+digraph G {
+        fontsize = 14
+        node [
+                fontsize = 14
+                shape = "record"
+        ]
+        edge [
+                fontname = "IBM Plex"
+                fontsize = 14
+        ]
+        Adminuser [
+                label = "{AdminUsers|+ aid : int\l+ auser : string\l+ email : string\l}"
+        ]
+        Adminroles [
+                label = "{AdminRoles|+ aid : int\l+ role : int\l}"
+        ]
+
+        AdminTenantRepoRoles [
+                label = "{AdminTenantRepoRoles|+ aid : int\l+ tid : int\l+ rid : int\l+ role : int\l}"
+        ]
+
+        Tenants [
+                label = "{Tenants|+ tid : int\l+ fname : string\l+ lname : string\l+ email : string\l+ ghuser : string\l+ ghtoken : string\l}"
+        ]
+        Repos [
+                label = "{Repos|+ rid : int\l+ rname : string\l+ ghserverid : int\l+ oid : int\l+ schedule : int\l}"
+        ]
+        TenantRepos [
+                label = "{TenantRepos|+ tid : int\l+ rid : int\l}"
+        ]
+        OrgUsers [
+                label = "{GHOrgUsers|+ oid : int\l+ username : string\l+ usertype : char\l+ email : string\l+ blog : string\l}"
+        ]
+        GHServer [
+                label = "{GHServers|+ ghserverid : int\l+ serverurirname : string\l}"
+        ]
+        Repotraffic [
+                label = "{Repotraffic|+ rid : int\l+ tdate : date\l+ viewcount : int\l+ vuniques : int\l+ clonecount : int\l+ cuniques : int\l}"
+        ]
+        Systemlog [
+                label = "{Systemlog|+ tid : int\l+ completed : timestamp\l+ numrepos : int\l+ state : string\l}"
+        ]
+
+        Adminuser -> Adminroles
+        Adminroles -> AdminTenantRepoRoles
+        AdminTenantRepoRoles -> Tenants
+        AdminTenantRepoRoles -> Repos
+        Tenants -> Systemlog
+        Tenants -> TenantRepos
+        TenantRepos -> Repos
+        Repos -> Repotraffic
+        Repos -> GHServer
+        Repos -> OrgUsers
+
+}
