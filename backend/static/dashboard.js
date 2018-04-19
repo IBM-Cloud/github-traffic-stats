@@ -25,20 +25,22 @@ function cannedDDESession() {
   var containerDiv = document.getElementById('ddeDashboard');
   var sessionCode;
   var dbSpec;
+  var cognosRootURL;
 
   createDDEDisplaySession().then(function(sessionInfo) {
     sessionCode = sessionInfo.sessionData.sessionCode;
     dbSpec=sessionInfo.dashboard;
+    cognosRootURL=sessionInfo.ddeAPIUrl;
     // if debugging is needed:
     // console.log(JSON.stringify(dbSpec));
-    return sessionCode, dbSpec;
+    return sessionCode, dbSpec,cognosRootURL;
   }, function(err) {
     sessionObj = null;
     containerDiv.innerHTML = '<h2>Failed to create session</h2>Please check your application credentials.';
   }).then(function() {
     window.myapi = new CognosApi({
-      // initialize Cognos API, static DDE URL for now
-      cognosRootURL: 'https://dde-us-south.analytics.ibm.com/daas/',
+      // initialize Cognos API
+      cognosRootURL: cognosRootURL,
       sessionCode: sessionCode,
       node: containerDiv
     });
@@ -89,19 +91,21 @@ function newDDESession() {
   var containerDiv = document.getElementById('ddeDashboard');
   var sessionCode;
   var csvStats;
+  var cognosRootURL;
 
   // retrieve session code and table definition
   createDDESession().then(function(sessionInfo) {
     sessionCode = sessionInfo.sessionData.sessionCode;
     csvStats= sessionInfo.csvStats;
-    return sessionCode, csvStats;
+    cognosRootURL= sessionInfo.ddeAPIUrl;
+    return sessionCode, csvStats, cognosRootURL;
   }, function(err) {
     sessionObj = null;
     containerDiv.innerHTML = '<h2>Failed to create session</h2>Please check your application credentials.';
   }).then(function() {
     // initialize Cognos API (DDE)
     window.myapi = new CognosApi({
-      cognosRootURL: 'https://dde-us-south.analytics.ibm.com/daas/',
+      cognosRootURL: cognosRootURL,
       sessionCode: sessionCode,
       node: document.getElementById('ddeDashboard')
     });

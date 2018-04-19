@@ -418,7 +418,7 @@ def dashboard_display_session():
     # Obtain new session code from DDE
     res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
     # All data in place, return it back to the client
-    return jsonify(sessionData=json.loads(res.text), dashboard=dboard), 201
+    return jsonify(sessionData=json.loads(res.text), dashboard=dboard, ddeAPIUrl=DDE['api_endpoint_url']), 201
 
 
 # Initialize session to display a canned DDE dashboard
@@ -466,7 +466,7 @@ def dashboard_edit_session():
     # Obtain new session code from DDE
     res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
     # Ok, return the session code and CSV data source information as JSON
-    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats), 201
+    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats, ddeAPIUrl=DDE['api_endpoint_url']), 201
 
 
 
@@ -671,8 +671,14 @@ def api_generate_repolist():
             yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
 
+# handle images correctly, some are expected at /images
+@app.route('/images/<path:path>')
+def static_file(path):
+    return app.send_static_file("images/"+path)
+
 # Some functionality is not available yet
 @app.route('/admin')
+@app.route('/repos')
 @app.route('/data')
 @auth.oidc_auth
 def not_available():
