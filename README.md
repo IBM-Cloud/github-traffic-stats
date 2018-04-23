@@ -1,6 +1,10 @@
 # Github Traffic Analytics: Combining serverless and Cloud Foundry for data retrieval and analytics
 This repository contains the code for an [IBM Cloud solution tutorial](https://console.bluemix.net/docs/tutorials/serverless-github-traffic-analytics.html). In the tutorial, we create an application to automatically collect Github traffic statistics for repositories and provide the foundation for traffic analytics. Github only provides access to the traffic data for the last 14 days. If you want to analyze statistics over a longer period of time, you need to download and store that data yourself. The app and the serverless action discussed in this tutorial implement a multi-tenant-ready solution to manage repositories, automatically collect traffic data on a daily or weekly schedule, and to view and analyze the collected data.
 
+Related blogs:
+* [Use Db2 and IBM Cloud to analyze GitHub traffic data (tutorial)](http://blog.4loeser.net/2018/04/use-db2-and-ibm-cloud-to-analyze-github.html)
+
+
 # Files in this repository
 The files in this repository have the following structure:
 * [backend](backend): Has the code for the Python-based server app, using the Flask framework
