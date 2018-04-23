@@ -25,6 +25,13 @@ Important files in the **functions** directory:
 The database schema, defined in [database.sql](backend/database.sql), can be graphically represented as (source in [Graphviz DOT notation](https://www.graphviz.org/documentation/) in [dbschema.gv.txt](dbschema.gv.txt)):
 ![](dbschema.png)
 
+# Create or change embedded dashboards
+An additional dashboard specification is available in file [dashboard2.json](backend/dashboard2.json). It allows to render charts like shown in the two screenshots below. Either copy the file to `dashboard.json` and use it instead of the default dashboard or modify the code to select from given dashboards.   
+Once you created a dashboard on your own, you can export the specification and copy it into a new file, similar to `dashboard2.json`. The app code automatically replaces the data source URL and the authentication token.
+![](screenshots/EmbeddedDashboard1.png)
+![](screenshots/EmbeddedDashboard2.png)
+
+
 # License
 See [LICENSE](LICENSE) for license information.
 
