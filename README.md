@@ -1,6 +1,12 @@
 # Github Traffic Analytics: Combining serverless and Cloud Foundry for data retrieval and analytics
 This repository contains the code for an [IBM Cloud solution tutorial](https://console.bluemix.net/docs/tutorials/serverless-github-traffic-analytics.html). In the tutorial, we create an application to automatically collect Github traffic statistics for repositories and provide the foundation for traffic analytics. Github only provides access to the traffic data for the last 14 days. If you want to analyze statistics over a longer period of time, you need to download and store that data yourself. The app and the serverless action discussed in this tutorial implement a multi-tenant-ready solution to manage repositories, automatically collect traffic data on a daily or weekly schedule, and to view and analyze the collected data.
 
+Related blogs:
+* [Tutorial: GitHub Traffic Analytics with Cloud Functions and Cloud Foundry](https://www.ibm.com/blogs/bluemix/2018/04/tutorial-github-traffic-analytics/)
+* [Use Db2 and IBM Cloud to analyze GitHub traffic data (tutorial)](http://blog.4loeser.net/2018/04/use-db2-and-ibm-cloud-to-analyze-github.html)
+* [Automated, regular database jobs with IBM Cloud Functions (and Db2)](http://blog.4loeser.net/2018/04/automated-regular-database-jobs-with.html)
+
+
 # Files in this repository
 The files in this repository have the following structure:
 * [backend](backend): Has the code for the Python-based server app, using the Flask framework
@@ -20,6 +26,13 @@ Important files in the **functions** directory:
 
 The database schema, defined in [database.sql](backend/database.sql), can be graphically represented as (source in [Graphviz DOT notation](https://www.graphviz.org/documentation/) in [dbschema.gv.txt](dbschema.gv.txt)):
 ![](dbschema.png)
+
+# Create or change embedded dashboards
+An additional dashboard specification is available in file [dashboard2.json](backend/dashboard2.json). It allows to render charts like shown in the two screenshots below. Either copy the file to `dashboard.json` and use it instead of the default dashboard or modify the code to select from given dashboards.   
+Once you created a dashboard on your own, you can export the specification and copy it into a new file, similar to `dashboard2.json`. The app code automatically replaces the data source URL and the authentication token.
+![](screenshots/EmbeddedDashboard1.png)
+![](screenshots/EmbeddedDashboard2.png)
+
 
 # License
 See [LICENSE](LICENSE) for license information.
