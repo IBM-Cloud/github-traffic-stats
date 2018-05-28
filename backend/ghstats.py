@@ -54,6 +54,7 @@ if 'VCAP_SERVICES' in os.environ:
    app.config.update({'SERVER_NAME': json.loads(os.environ['VCAP_APPLICATION'])['uris'][0],
                       'SECRET_KEY': 'my_not_so_dirty_secret_key',
                       'PREFERRED_URL_SCHEME': 'https',
+                      'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
                       'DEBUG': False})
 
 # we are local, so load info from a file
@@ -220,7 +221,10 @@ def secondstep():
 @auth.oidc_auth
 def login():
     setuserrole(flask.session['id_token']['email'])
-    return redirect(url_for('repostatistics'))
+    if flask.session['userrole']>0:
+        return redirect(url_for('repostatistics'))
+    else:
+        return redirect(url_for('logout'))
 
 # Show a user profile
 @app.route('/user')
