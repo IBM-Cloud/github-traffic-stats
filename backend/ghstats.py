@@ -220,8 +220,7 @@ def secondstep():
 @app.route('/login')
 @auth.oidc_auth
 def login():
-    setuserrole(flask.session['id_token']['email'])
-    if flask.session['userrole']>0:
+    if setuserrole(flask.session['id_token']['email'])>0:
         return redirect(url_for('repostatistics'))
     else:
         return redirect(url_for('logout'))
