@@ -25,12 +25,6 @@ from itsdangerous import (TimedJSONWebSignatureSerializer
                           as Serializer, BadSignature, SignatureExpired)
 
 
-# monkey patch for now, so that Flask-pyoidc works with App ID
-# import the patched function and overwrite the existing one in the module
-import mypatch
-OIDCAuthentication._handle_authentication_response=mypatch.my_handle_authentication_response
-
-
 # Initialize Flask app
 app = Flask(__name__)
 
