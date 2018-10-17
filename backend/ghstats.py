@@ -330,7 +330,7 @@ def newrepo():
             trans.rollback()
             raise
         # Log to stdout stream
-        print "Created repo with id "+str(rid)
+        print("Created repo with id "+str(rid))
         return jsonify(message="Your new repo ID: "+str(rid), repoid=rid)
     else:
         return jsonify(message="Error: no repository added") # should go to error or info page
@@ -343,7 +343,7 @@ def deleterepo():
         # Access form data from app
         repoid=request.form['repoid']
         # Log to stdout stream
-        print "Deleted repo with id "+str(repoid)
+        print("Deleted repo with id "+str(repoid))
 
         # could check if repo exists
         # but skipping to reduce complexity
@@ -405,7 +405,7 @@ def dashboard_display_session():
     # For debugging - obtain the changed value for Authorization and print it:
     # vals=[item for item in dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['property']
     #         if item['name']=='headers'][0]['value'][0]['value']
-    # print vals
+    # print(vals)
     # dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['sourceUrl']
 
 
