@@ -13,6 +13,7 @@ Related blogs:
 The files in this repository have the following structure:
 * [backend](backend): Has the code for the Python-based server app, using the Flask framework
 * [functions](functions): Code for IBM Cloud Functions which is used for the automatic collection of the Github traffic data
+* [slack](slack): Automated weekly reporting of GitHub statistics into Slack channels (not part of the tutorial)
 
 Important files in the **backend** directory:
 * [ghstats.py](backend/ghstats.py): Flask app to manage repositories and their traffic data
