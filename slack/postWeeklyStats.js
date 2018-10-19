@@ -51,7 +51,7 @@ try {
 
   // the repository count
   var resString="*Total repositories*: "+repoCount[0]['REPOCOUNT'];
-      resString+="\nSee more at https://cps-github-stats.mybluemix.net/";
+      resString+="\nSee more at INSERT YOUR URI here";
   // format the data for the attachment
   var dataString="```REPONAME/ORGNAME,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES:\n";
   // add each result row (if any)
