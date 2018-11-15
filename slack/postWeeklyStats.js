@@ -14,7 +14,6 @@ var rp = require('request-promise');
 var moment = require('moment');
 
 
-
 // fetch the weekly stats from previous work week
 function fetchWeeklyStats(dsn, emailid, webhook, channel) {
   // predefined SQL statements
@@ -84,16 +83,14 @@ try {
   method: 'POST',
   uri: webhook,
   body: payload,
+  resolveWithFullResponse: true,
   json: true // Automatically stringifies the body to JSON
 };
 
-rp(options)
-  .then(function (parsedBody) {
-      return {message : "ok, message posted"};
-  })
-  .catch(function (err) {
-      return {message : "Failed to post to Slack"};
-  });
+// return response to the request, so the status will be logged
+return rp(options).then(function(response) {
+  return response;
+});
 }
 
 function main({emailid, webhook, channel, __bx_creds: {dashDB:{dsn}}}) {
