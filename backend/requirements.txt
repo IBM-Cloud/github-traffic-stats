@@ -33,8 +33,8 @@ pycparser==2.18           # via cffi
 pycryptodomex==3.5.1      # via oic, pyjwkest
 pyjwkest==1.4.0           # via oic
 pyopenssl==17.5.0         # via oic
-requests==2.18.4          # via oic, pyjwkest
+requests>=2.20.0          # via oic, pyjwkest
 six==1.11.0               # via cryptography, oic, pyjwkest, pyopenssl
 sqlalchemy==1.2.6         # via flask-sqlalchemy, ibm-db-sa
-urllib3==1.22             # via requests
+urllib3>=1.23             # via requests
 werkzeug==0.12.1          # via flask
