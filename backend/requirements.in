@@ -3,6 +3,6 @@ Flask
 Flask-SQLAlchemy
 flask_httpauth
 githubpy
-flask_pyoidc
+flask_pyoidc>=2.0.0
 ibm_db_sa
-ibm_db
+ibm_db>=3.0.0

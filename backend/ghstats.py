@@ -17,6 +17,7 @@ import github # githubpy module
 from flask import Flask, jsonify,redirect,request,render_template, url_for, Response, stream_with_context
 from flask_httpauth import HTTPBasicAuth
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
+from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata
 from sqlalchemy import Column, Table, Integer, String, select, ForeignKey
 from sqlalchemy.orm import relationship, backref
 from flask_sqlalchemy import SQLAlchemy
@@ -78,20 +79,11 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['SQLALCHEMY_ECHO']=False
 
 # Configure access to App ID service for the OpenID Connect client
-provider_config={
-     "issuer": "appid-oauth.ng.bluemix.net",
-     "authorization_endpoint": appIDInfo['oauthServerUrl']+"/authorization",
-     "token_endpoint": appIDInfo['oauthServerUrl']+"/token",
-     "userinfo_endpoint": appIDInfo['profilesUrl']+"/api/v1/attributes",
-     "jwks_uri": appIDInfo['oauthServerUrl']+"/publickeys"
-}
-client_info={
-    "client_id": appIDInfo['clientId'],
-    "client_secret": appIDInfo['secret']
-}
+appID_clientinfo=ClientMetadata(client_id=appIDInfo['clientId'],client_secret=appIDInfo['secret'])
+appID_config = ProviderConfiguration(issuer=appIDInfo['oauthServerUrl'],client_metadata=appID_clientinfo)
 
 # Initialize OpenID Connect client
-auth = OIDCAuthentication(app, provider_configuration_info=provider_config, client_registration_info=client_info,userinfo_endpoint_method=None)
+auth=OIDCAuthentication({'default': appID_config}, app)
 # Initialize BasicAuth, needed for token access to data
 basicauth = HTTPBasicAuth()
 
@@ -164,7 +156,7 @@ def initializeApp():
 
 # Show page for entering user information for first system user and tenant
 @app.route('/admin/firststep', methods=['GET'])
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def firststep():
     return render_template('firststep.html')
 
@@ -174,7 +166,7 @@ def firststep():
 # tenant.
 # Called from firststep
 @app.route('/admin/secondstep', methods=['POST'])
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def secondstep():
     username=request.form['username']
     ghuser=request.form['ghuser']
@@ -212,7 +204,7 @@ def secondstep():
 
 # Official login URI, redirects to repo stats after processing
 @app.route('/login')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def login():
     if setuserrole(flask.session['id_token']['email'])>0:
         return redirect(url_for('repostatistics'))
@@ -222,7 +214,7 @@ def login():
 # Show a user profile
 @app.route('/user')
 @app.route('/user/profile')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def profile():
     return render_template('profile.html',id=flask.session['id_token'], role=flask.session['userrole'])
 
@@ -235,7 +227,7 @@ def logout():
 
 # Form to enter new tenant data
 @app.route('/admin/newtenant')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def newtenant():
     if isAdministrator():
         return render_template('newuser.html')
@@ -245,7 +237,7 @@ def newtenant():
 
 # Show table with system logs
 @app.route('/admin/systemlog')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def systemlog():
     if isSysMaintainer() or isAdministrator():
         return render_template('systemlog.html',)
@@ -254,7 +246,7 @@ def systemlog():
 
 # return page with the repository stats
 @app.route('/repos/stats')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def repostatistics():
     if isTenant() or isTenantViewer() or isRepoViewer():
         # IDEA: expand to limit number of selected days, e.g., past 30 days
@@ -264,7 +256,7 @@ def repostatistics():
 
 # return page with the repository stats
 @app.route('/repos/statsweekly')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def repostatistics_weekly():
     if isTenant() or isTenantViewer() or isRepoViewer():
         # IDEA: expand to limit number of selected days, e.g., past 30 days
@@ -277,7 +269,7 @@ def repostatistics_weekly():
 # Show list of managed repositories
 @app.route('/repos')
 @app.route('/repos/list')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def listrepos():
     if isTenant():
         return render_template('repolist.html')
@@ -286,7 +278,7 @@ def listrepos():
 
 # Process the request to add a new repository
 @app.route('/api/newrepo', methods=['POST'])
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def newrepo():
     if isTenant():
         # Access form data from app
@@ -337,7 +329,7 @@ def newrepo():
 
 # Process the request to delete a repository
 @app.route('/api/deleterepo', methods=['POST'])
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def deleterepo():
     if isTenant():
         # Access form data from app
@@ -374,7 +366,7 @@ def deleterepo():
 
 # Initialize session to display a canned DDE dashboard
 @app.route('/api/v1/dashboard_display_session', methods=['POST'])
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def dashboard_display_session():
     # For DDE-based data access we are going to use token-based Basic Auth
     # In the following, encode the session user's email into a time-limited
@@ -387,7 +379,8 @@ def dashboard_display_session():
     # generate a new token based on the email address
     token=s.dumps({'id': flask.session['id_token']['email']})
     # encode it for Basic Auth usage
-    enctoken=b64encode(token.decode('ascii')+":Iamatoken").decode("ascii")
+    token_string=token.decode('ascii')+":Iamatoken"
+    enctoken=b64encode(token_string.encode()).decode("ascii")
 
     # Load the dashboard specification from JSON file - this could be stored in
     # the database, too.
@@ -420,7 +413,7 @@ def dashboard_display_session():
 
 # Initialize session to display a canned DDE dashboard
 @app.route('/api/v1/dashboard_edit_session', methods=['POST'])
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def dashboard_edit_session():
     # For DDE-based data access we are going to use token-based Basic Auth
     # In the following, encode the session user's email into a time-limited
@@ -428,7 +421,8 @@ def dashboard_edit_session():
     expiration=3600
     s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
     token=s.dumps({'id': flask.session['id_token']['email']})
-    enctoken=b64encode(token.decode('ascii')+":Iamatoken").decode("ascii")
+    token_string=token.decode('ascii')+":Iamatoken"
+    enctoken=b64encode(token_string.encode()).decode("ascii")
 
     # Define a CSV data source for DDEcsvStats
     # The sourceUrl and the authentication are dynamically generated
@@ -469,7 +463,7 @@ def dashboard_edit_session():
 
 # Display a canned DDE dashboard
 @app.route('/repos/dashboard')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def dashboard():
     if isTenant() or isTenantViewer() or isRepoViewer():
         return render_template('dashboard.html')
@@ -478,7 +472,7 @@ def dashboard():
 
 # Create a new DDE dashboard
 @app.route('/repos/newdashboard')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def new_dashboard():
     if isTenant():
         return render_template('dashboardnew.html')
@@ -489,7 +483,7 @@ def new_dashboard():
 
 # return the currently active user as csv file
 @app.route('/data/user.csv')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def generate_user():
     def generate(email):
         yield "user" + '\n'
@@ -529,7 +523,7 @@ statsWorkWeek="""select r.rid,orgname,reponame,varchar_format(tdate,'YYYY-IW') a
 
 # return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostats.txt')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def generate_data_repostats_txt():
     def generate():
         yield '{ "data": [\n'
@@ -547,7 +541,7 @@ def generate_data_repostats_txt():
 
 # return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostatsWorkWeek.txt')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def generate_data_repostatsWorkWeek_txt():
     def generate():
         yield '{ "data": [\n'
@@ -566,7 +560,7 @@ def generate_data_repostatsWorkWeek_txt():
 
 # return the system logs for the web page, dynamically loaded
 @app.route('/data/systemlogs.txt')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def generate_data_systemlogs_txt():
     if isAdministrator() or isSysMaintainer():
         def generate():
@@ -586,7 +580,7 @@ def generate_data_systemlogs_txt():
 
 # return the repository statistics for the current user as csv file
 @app.route('/data/repostats.csv')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def generate_repostats():
     def generate():
         yield "RID,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
@@ -630,7 +624,7 @@ def verify_password(token, nopassword):
 
 # Generate list of repositories for web page, dynamically loaded
 @app.route('/data/repositories.txt')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def generate_data_repolist_txt():
     def generate():
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
@@ -647,7 +641,7 @@ def generate_data_repolist_txt():
 
 # Export repositories as CSV file
 @app.route('/data/repositories.csv')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def generate_repolist():
     def generate():
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
@@ -677,7 +671,7 @@ def static_file(path):
 @app.route('/admin')
 @app.route('/repos')
 @app.route('/data')
-@auth.oidc_auth
+@auth.oidc_auth('default')
 def not_available():
     return render_template('notavailable.html')
 
