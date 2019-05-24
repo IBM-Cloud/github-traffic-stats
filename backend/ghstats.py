@@ -11,10 +11,11 @@
 # Written by Henrik Loeser (data-henrik), hloeser@de.ibm.com
 # (C) 2018 by IBM
 
-import flask, os, json, datetime, re, requests
+import flask, os, json, datetime, decimal, re, requests
 from base64 import b64encode
 import github # githubpy module
-from flask import Flask, jsonify,redirect,request,render_template, url_for, Response, stream_with_context
+from flask import (Flask, jsonify, make_response, redirect,request,
+		   render_template, url_for, Response, stream_with_context)
 from flask_httpauth import HTTPBasicAuth
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
 from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata
