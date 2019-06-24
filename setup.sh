@@ -2,7 +2,7 @@
 
 # Create a Db2 Warehouse service and a service key
 ibmcloud cf create-service dashDB Entry ghstatsDB
-ibmcloud cf create-service-key dashDB-p ghstatskey
+ibmcloud cf create-service-key ghstatsDB ghstatskey
 
 # Create AppID service using "bx resource" command. AppID is available with
 # resource groups.
