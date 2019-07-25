@@ -3,5 +3,10 @@
 
 AppID_service=ghstatsAppID
 DB_service=ghstatsDB
-DB_service_key=ghstatskey
 DDE_service=ghstatsDDE
+
+# Initial name of service keys
+DB_service_key=ghstatskey
+
+# Cloud Foundry application name - needed to rotate the credentials
+CFApp_name=github-traffic-stats

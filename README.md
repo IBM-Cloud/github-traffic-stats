@@ -30,6 +30,7 @@ Important files in the **functions** directory:
 * ghstats.zip: Zip archive with the action code and the githubpy module included. The zip archive is used to create the action.
 
 The database schema, defined in [database.sql](backend/database.sql), can be graphically represented as (source in [Graphviz DOT notation](https://www.graphviz.org/documentation/) in [dbschema.gv.txt](dbschema.gv.txt)):
+
 ![](dbschema.png)
 
 # Create or change embedded dashboards
@@ -38,6 +39,11 @@ Once you created a dashboard on your own, you can export the specification and c
 ![](screenshots/EmbeddedDashboard1.png)
 ![](screenshots/EmbeddedDashboard2.png)
 
+
+# Security: Rotate service credentials
+If you use this solution in production, then you should rotate the service credentials on a regular basis. Many policies require to change passwords and credentials every 90 days.
+
+The scripts [rotateBackendCredentials.sh](rotateBackendCredentials.sh) and [rotateFunctionCredentials.sh](rotateFunctionCredentials.sh) are provided to help automate that process.
 
 # License
 See [LICENSE](LICENSE) for license information.
