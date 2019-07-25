@@ -6,7 +6,7 @@ This directory contains files to allow automated reporting of GitHub statistics 
 ### Setup
 See the Slack documentation on [incoming webhooks](https://api.slack.com/incoming-webhooks) on how to set up a Slack app based on a webhook. You may need permission or authorization to install such an app into your Slack workspace. Follow the instructions until you have an URI for the webhook and have installed the app into the desired channel.
 
-Copy the file **slackSetup.template.sh** to **slackSetup.sh**. Replace the parameter values for the incoming webhook, Slack channel, and emailid to match your environment. Now run the script to
+Copy the file **slackSetup.template.sh** to **slackSetup.sh**. Replace the parameter values for the incoming webhook, Slack channel, and emailid to match your environment. The names for the Db2 service and the service key are taken from [servicenames.sh](/servicenames.sh). Now run the script to
  * create a new IBM Cloud Functions package
  * create an action within that package
  * bind the Db2 service credentials to that action

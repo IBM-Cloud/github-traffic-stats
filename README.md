@@ -15,6 +15,8 @@ The files in this repository have the following structure:
 * [functions](functions): Code for IBM Cloud Functions which is used for the automatic collection of the Github traffic data
 * [slack](slack): Automated weekly reporting of GitHub statistics into Slack channels (not part of the tutorial)
 
+Adapt the service names in [servicenames.sh](/servicenames.sh) and [/backend/manifest.yml](/backend/manifest.yml) to your environment or preferred names for deployment.
+
 Important files in the **backend** directory:
 * [ghstats.py](backend/ghstats.py): Flask app to manage repositories and their traffic data
 * [database.sql](backend/database.sql): SQL script (for Db2) which is read and executed by the app during initialization.

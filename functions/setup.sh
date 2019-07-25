@@ -4,8 +4,6 @@
 # regular Github statistics
 #
 # Written by Henrik Loeser
-# service names
-. ./../servicenames.sh
 
 # We need to pull down the githubpy file before packaging,
 # then create the zip file and thereafter delete githubpy again (or leave it?).
@@ -17,6 +15,9 @@
 # zip -r ghstats.zip  __main__.py github.py
 #
 # Ok, now we can deploy the objects
+
+# service names
+. ./../servicenames.sh
 
 # Create the action to collect statistics
 ibmcloud fn action create collectStats --kind python-jessie:3 ghstats.zip

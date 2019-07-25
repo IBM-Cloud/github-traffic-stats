@@ -1,3 +1,7 @@
+#!/bin/bash
+
+. ./../servicenames.sh
+
 # create package to bind parameters to it
 ibmcloud fn package create Stats4Slack
 
@@ -5,7 +9,7 @@ ibmcloud fn package create Stats4Slack
 ibmcloud fn action update Stats4Slack/postWeeklyStats postWeeklyStats.js  --kind nodejs:8
 
 # bind the Db2 credentials to action
-ibmcloud fn service bind dashDB Stats4Slack/postWeeklyStats --instance ghstatsDB --keyname ghstatskey
+ibmcloud fn service bind dashDB Stats4Slack/postWeeklyStats --instance $DB_service --keyname $DB_service_key
 
 # bin webhook, channel name, emailid to it
 ibmcloud fn package bind Stats4Slack \
