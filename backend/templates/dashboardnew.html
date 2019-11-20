@@ -5,32 +5,24 @@
 
 {% block body %}
 
-
-<div class="tile is-ancestor">
-  <div class="tile is-2 is-parent">
-    <div class="tile is-child box">
-      <p class="title">Dashboard</p>
-      <p><button class="button is-dark" onclick="readDDESpec()">DDE Spec</button></p>
-
-      <div class="modal">
-         <div class="modal-background"></div>
-         <div class="modal-content">
-           <div class="content">
-           <p class="title has-text-white is-2">JSON Spec:</p>
-           <textarea cols="80" rows="20" id="modal-spec"></textarea>
-           <p id="other-spec">foo bar</p>
-          </div>
-         </div>
-         <button class="modal-close"></button>
+<div class="columns" style="flex: 1;">
+  <div class="column is-one-quarter">
+    <p class="title">Dashboard</p>
+    <p><button class="button is-dark" onclick="readDDESpec()">DDE Spec</button></p>
+    <div class="modal">
+      <div class="modal-background"></div>
+      <div class="modal-content">
+        <div class="content">
+        <p class="title has-text-white is-2">JSON Spec:</p>
+        <textarea cols="80" rows="20" id="modal-spec"></textarea>
+        <p id="other-spec">foo bar</p>
        </div>
+      </div>
+      <button class="modal-close"></button>
     </div>
   </div>
-  <div class="tile is-parent">
-    <div class="tile is-child box">
-      <figure class="image is-4by3">
-            <img id="ddeDashboard">
-      </figure>
-    </div>
+  <div class="column">
+    <div id="ddeDashboard"></div>
   </div>
 </div>
 
@@ -43,7 +35,7 @@
   window.onload=newDDESession();
 
   function readDDESpec() {
-          dashboardAPI.getSpec().then(function(spec){
+    window.dashboardAPI.getSpec().then(function(spec){
             console.log("Got the spec");
             $('#modal-spec').val(JSON.stringify(spec));
             $('#other-spec').val("All loaded");

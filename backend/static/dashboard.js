@@ -46,8 +46,6 @@ function cannedDDESession() {
     });
     window.myapi.initialize().then(function() {
       console.log('API created successfully.');
-    }, function(err) {
-      console.log('Failed to create API. ' + err.message);
     }).then(function() {
       // open an existing dashboard
       // the spec was obtained from the app server
@@ -63,8 +61,9 @@ function cannedDDESession() {
           console.log(err);
         }
       );
-
-    })
+    }).catch(function(err) {
+      console.log('Failed to create API. ' + err.message);
+    });
   });
 }
 
@@ -111,9 +110,8 @@ function newDDESession() {
     });
     window.myapi.initialize().then(function() {
       console.log('API created successfully.');
-    }, function(err) {
-      console.log('Failed to create API. ' + err.message);
-    }).then(function() {
+    })
+    .then(function() {
       // create new dashboard and add table as source
       window.myapi.dashboard.createNew().then(
         function(dashboardAPI) {
@@ -132,5 +130,8 @@ function newDDESession() {
           console.log('User hit cancel on the template picker page.');
         }
       );})
+    })
+    .catch(function(err) {
+      console.log('Failed to create API. ' + err.message);
     });
   }
