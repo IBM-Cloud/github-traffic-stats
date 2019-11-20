@@ -64,7 +64,7 @@ else:
        # Config for Db2
        dbInfo=appConfig['dashDB']
        #Config for DDE
-       DDE=appConfig['DDE']
+       DDE=appConfig['dynamic-dashboard-embedded']
    # See http://flask.pocoo.org/docs/0.12/config/
    app.config.update({'SERVER_NAME': '0.0.0.0:5000',
                       'SECRET_KEY': 'my_secret_key',

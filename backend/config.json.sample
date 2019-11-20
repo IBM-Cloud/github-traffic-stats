@@ -23,7 +23,7 @@
      "uri": "db2://dashxxxxx:xxxxxxxxxxx@dashdb---------------.bluemix.net:50000/BLUDB",
      "username": "dashxxxxx"
    },
-"DDE": {
+"dynamic-dashboard-embedded": {
   "api_endpoint_url": "https://dde-us-south.analytics.ibm.com/daas/",
   "apikey": "xxxxxxxxxxxxxxx",
   "client_id": "yyyyyyyyyyyyyy",
