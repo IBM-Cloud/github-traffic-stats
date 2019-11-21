@@ -64,7 +64,7 @@ else:
        # Config for Db2
        dbInfo=appConfig['dashDB']
        #Config for DDE
-       DDE=appConfig['DDE']
+       DDE=appConfig['dynamic-dashboard-embedded']
    # See http://flask.pocoo.org/docs/0.12/config/
    app.config.update({'SERVER_NAME': '0.0.0.0:5000',
                       'SECRET_KEY': 'my_secret_key',
@@ -75,7 +75,12 @@ else:
 
 # General setup based on the obtained configuration
 # Configure database access
-app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']
+if dbInfo['port']==50001:
+    # if we are on the SSL port, add additional parameter for the driver
+    app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']+"Security=SSL;"
+else:
+    app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['SQLALCHEMY_ECHO']=False
 

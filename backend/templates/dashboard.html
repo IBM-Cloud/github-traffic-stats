@@ -4,19 +4,13 @@
 {% endblock %}
 
 {% block body %}
-<div class="tile is-ancestor">
-  <div class="tile is-2 is-parent">
-    <div class="tile is-child box">
-      <p class="title">Dashboard</p>
-        <p>Daily statistics for all repositories.</p>
-    </div>
+<div class="columns" style="flex: 1;">
+  <div class="column is-one-quarter">
+    <p class="title">Dashboard</p>
+    <p>Daily statistics for all repositories.</p>
   </div>
-  <div class="tile is-parent">
-    <div class="tile is-child box">
-      <figure class="image is-4by3">
-            <img id="ddeDashboard">
-      </figure>
-    </div>
+  <div class="column">
+    <div id="ddeDashboard"></div>
   </div>
 </div>
 

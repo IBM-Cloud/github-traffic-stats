@@ -1,0 +1,20 @@
+.Site {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+.Site-content {
+  flex: 1;
+  display: flex;
+  margin: 25px;
+}
+
+#ddeDashboard {
+  height: 100%;
+  width: 100%;
+}
+
+footer {
+  padding: 20px !important;
+}

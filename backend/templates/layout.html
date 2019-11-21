@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 		 {% block title %}{% endblock %}
     <link rel="stylesheet" href="{{ url_for('static', filename='bulma.min.css')}}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css')}}">
 		<script defer src="https://use.fontawesome.com/releases/v5.0.6/js/all.js"></script>
 		{% block extra_stylesheets %} {% endblock %}
   </head>
 
-<body>
+<body class="Site">
 	<nav class="navbar is-light">
 	  <div class="navbar-brand">
-	    <a class="navbar-item" href="https://console.bluemix.net/docs/tutorials/index.html">
+	    <a class="navbar-item" href="https://cloud.ibm.com/docs/tutorials/">
 	      <strong>TUTORIALS</strong>
 	    </a>
 	    <div class="navbar-burger burger" data-target="navbarTop">
@@ -81,7 +82,7 @@
 	      <div class="navbar-item">
 	        <div class="field is-grouped">
 	          <p class="control">
-            <a href="https://github.com/data-henrik/github-traffic-stats">
+            <a href="https://github.com/IBM-Cloud/github-traffic-stats">
 							<span class="icon" style="color: #333;">
           			<i class="fab fa-lg fa-github"></i>
         			</span>
@@ -93,21 +94,15 @@
 	  </div>
 	</nav>
 
-
-	<section class="section">
-
-			{% block body %}{% endblock %}
-
-  </section>
-<hr>
+	<div class="Site-content container-fluid">
+		{% block body %}{% endblock %}
+	</div>
 	<footer class="footer">
-		<div class="container">
 			<div class="content has-text-centered">
 				<a href="http://www.ibm.com/cloud/">IBM Cloud</a>
 				  &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;
-				<a href="https://console.bluemix.net/docs/tutorials/index.html">IBM Cloud Docs - Solution Tutorials</a>
+				<a href="https://cloud.ibm.com/docs/tutorials/">IBM Cloud Docs - Solution Tutorials</a>
 	 		</div>
-		</div>
 	</footer>
 
 		{% block extra_javascripts %} {% endblock %}
