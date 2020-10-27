@@ -5,21 +5,20 @@
 #    pip-compile requirements.in
 #
 alabaster==0.7.10         # via oic
-asn1crypto==0.24.0        # via cryptography
 beaker==1.9.0             # via oic
 certifi==2018.1.18        # via requests
 cffi==1.11.5              # via cryptography
 chardet==3.0.4            # via requests
 click==6.7                # via flask
-cryptography==2.6.1       # via pyopenssl
-flask-httpauth==3.2.3
-flask-pyoidc==2.0.0
-flask-sqlalchemy==2.3.2
-flask==1.0.3
+cryptography==3.2         # via pyopenssl
+flask-httpauth==3.2.3     # via -r requirements.in
+flask-pyoidc==2.0.0       # via -r requirements.in
+flask-sqlalchemy==2.3.2   # via -r requirements.in
+flask==1.0.3              # via -r requirements.in, flask-httpauth, flask-pyoidc, flask-sqlalchemy
 future==0.16.0            # via oic, pyjwkest
-githubpy==1.1.0
-ibm-db-sa==0.3.3
-ibm-db==3.0.1
+githubpy==1.1.0           # via -r requirements.in
+ibm-db-sa==0.3.3          # via -r requirements.in
+ibm-db==3.0.1             # via -r requirements.in
 idna==2.6                 # via requests
 itsdangerous==0.24        # via flask
 jinja2==2.10.1            # via flask
