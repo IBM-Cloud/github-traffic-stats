@@ -22,6 +22,7 @@ from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMet
 from sqlalchemy import Column, Table, Integer, String, select, ForeignKey
 from sqlalchemy.orm import relationship, backref
 from flask_sqlalchemy import SQLAlchemy
+from flask_talisman import Talisman
 # Authentication for DDE, based on token
 from itsdangerous import (TimedJSONWebSignatureSerializer
                           as Serializer, BadSignature, SignatureExpired)
@@ -29,6 +30,21 @@ from itsdangerous import (TimedJSONWebSignatureSerializer
 
 # Initialize Flask app
 app = Flask(__name__)
+# Set up content security policy, so that resources can be loaded and executed
+# Could be slightly optimized for further security, e.g., by making scripts
+# local and be more specific about script execution.
+csp = {
+    'default-src': [
+        '\'self\'',
+        '\'unsafe-inline\'',
+        'use.fontawesome.com',
+        'cdn.datatables.net',
+        'cdn.jsdelivr.net',
+        'cdnjs.cloudflare.com',
+        '*.ibm.com'
+    ]
+}
+Talisman(app, content_security_policy=csp)
 
 # Check if we are in a Cloud Foundry environment, i.e., on IBM Cloud
 # If we are on IBM Cloud, obtain the credentials from the environment.
@@ -142,7 +158,6 @@ def isTenantViewer():
 # Has the user the role of tenant stats viewer?
 def isRepoViewer():
     return checkUserrole(checkbit=16)
-
 
 # Index page, unprotected to display some general information
 @app.route('/', methods=['GET'])
