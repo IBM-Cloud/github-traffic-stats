@@ -38,6 +38,12 @@ csp = {
         '\'self\'',
         '\'unsafe-inline\'',
         'use.fontawesome.com',
+        '*.ibm.com'
+    ],
+    'script-src': [
+        '\'self\'',
+        '\'unsafe-inline\'',
+        'use.fontawesome.com',
         'cdn.datatables.net',
         'cdn.jsdelivr.net',
         'cdnjs.cloudflare.com',
