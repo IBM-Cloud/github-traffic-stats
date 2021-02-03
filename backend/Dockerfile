@@ -1,21 +1,21 @@
-FROM ubuntu:18.04
-RUN apt-get update && \
-  apt-get install -y software-properties-common && \
-  add-apt-repository ppa:jonathonf/python-3.6
+FROM python:3.7-slim AS compile-image
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends build-essential gcc
 
-RUN apt-get install -y build-essential python3.6 python3.6-dev python3-pip
+RUN python -m venv /opt/venv
+# Make sure we use the virtualenv:
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
 
-# We copy just the requirements.txt first to leverage Docker cache
-COPY ./requirements.txt /app/requirements.txt
-
-WORKDIR /app
-
-RUN pip3 install -r requirements.txt
-
+FROM python:3.7-slim AS build-image
+COPY --from=compile-image /opt/venv /opt/venv
 COPY . .
 
-EXPOSE 5000
-ENTRYPOINT [ "python3" ]
-
-CMD [ "ghstats.py" ]
+# Make sure we use the virtualenv:
+ENV PATH="/opt/venv/bin:$PATH"
+EXPOSE 8080
+ENTRYPOINT [ "python"]
+CMD ["ghstats.py" ]

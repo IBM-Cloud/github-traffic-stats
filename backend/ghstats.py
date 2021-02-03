@@ -11,22 +11,36 @@
 # Written by Henrik Loeser (data-henrik), hloeser@de.ibm.com
 # (C) 2018 by IBM
 
-import flask, os, json, datetime, decimal, re, requests
+import flask, os, json, datetime, decimal, re, requests, time
+
+# for loading .env
+from dotenv import load_dotenv
+
+# Needed for decoding / encoding credentials
 from base64 import b64encode
-import github # githubpy module
+
+# githubpy module to access GitHub
+import github
+
+# everything Flask for this app
 from flask import (Flask, jsonify, make_response, redirect,request,
 		   render_template, url_for, Response, stream_with_context)
 from flask_httpauth import HTTPBasicAuth
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
 from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata
-from sqlalchemy import Column, Table, Integer, String, select, ForeignKey
-from sqlalchemy.orm import relationship, backref
+
+# Database access using SQLAlchemy
 from flask_sqlalchemy import SQLAlchemy
-from flask_talisman import Talisman
+
+# Advanced security
+from flask_talisman import Talisman, ALLOW_FROM
+
 # Authentication for DDE, based on token
 from itsdangerous import (TimedJSONWebSignatureSerializer
                           as Serializer, BadSignature, SignatureExpired)
 
+# load environment
+load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -38,6 +52,8 @@ csp = {
         '\'self\'',
         '\'unsafe-inline\'',
         'use.fontawesome.com',
+        'cdn.jsdelivr.net',
+        'cdn.datatables.net',
         '*.ibm.com'
     ],
     'script-src': [
@@ -50,65 +66,41 @@ csp = {
         '*.ibm.com'
     ]
 }
-Talisman(app, content_security_policy=csp)
+talisman=Talisman(app, content_security_policy=csp)
 
-# Check if we are in a Cloud Foundry environment, i.e., on IBM Cloud
-# If we are on IBM Cloud, obtain the credentials from the environment.
-# Else, read them from file.
-# Thereafter, set up the services and module with the obtained credentials.
-if 'VCAP_SERVICES' in os.environ:
-   vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
+# Read variables
+# There are from local .env or provided through K8s secrets
 
-   # Obtain configuration for Db2 Warehouse database
-   dbInfo=vcapEnv['dashDB'][0]['credentials']
+# Obtain configuration for Db2 Warehouse database
+DB2_URI=os.getenv("DB2_URI")
 
-   # Obtain configuration for
-   appIDInfo = vcapEnv['AppID'][0]['credentials']
+# AppID settings
+APPID_CLIENT_ID=os.getenv("APPID_CLIENT_ID")
+APPID_OAUTH_SERVER_URL=os.getenv("APPID_OAUTH_SERVER_URL")
+APPID_SECRET=os.getenv("APPID_SECRET")
 
-   # Configure access to DDE service
-   DDE=vcapEnv['dynamic-dashboard-embedded'][0]['credentials']
+# DDE settings
+DDE_API_ENDPOINT_URL=os.getenv("DDE_API_ENDPOINT_URL")
+DDE_CLIENT_ID=os.getenv("DDE_CLIENT_ID")
+DDE_CLIENT_SECRET=os.getenv("DDE_CLIENT_SECRET")
 
-   # Update Flask configuration
-   app.config.update({'SERVER_NAME': json.loads(os.environ['VCAP_APPLICATION'])['uris'][0],
-                      'SECRET_KEY': 'my_not_so_dirty_secret_key',
-                      'PREFERRED_URL_SCHEME': 'https',
-                      'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
-                      'DEBUG': False})
-
-# we are local, so load info from a file
-else:
-   # Credentials are read from a file
-   with open('config.json') as confFile:
-       # load JSON data from file
-       appConfig=json.load(confFile)
-       # Extract AppID configuration
-       appIDInfo=appConfig['AppID']
-       # Config for Db2
-       dbInfo=appConfig['dashDB']
-       #Config for DDE
-       DDE=appConfig['dynamic-dashboard-embedded']
-   # See http://flask.pocoo.org/docs/0.12/config/
-   app.config.update({'SERVER_NAME': '0.0.0.0:5000',
-                      'SECRET_KEY': 'my_secret_key',
-                      'PREFERRED_URL_SCHEME': 'http',
-                      'PERMANENT_SESSION_LIFETIME': 2592000, # session time in seconds (30 days)
-                      'DEBUG': True})
-
+# Update Flask configuration
+#'SERVER_NAME': os.getenv("HOSTNAME"),
+app.config.update({'OIDC_REDIRECT_URI': os.getenv('FULL_HOSTNAME')+'/redirect_uri',
+                   'SECRET_KEY': 'my_not_so_dirty_secret_key',
+#                   'PREFERRED_URL_SCHEME': 'https',
+                   'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
+                   'DEBUG': os.getenv("FLASK_DEBUG", False)})
 
 # General setup based on the obtained configuration
 # Configure database access
-if dbInfo['port']==50001:
-    # if we are on the SSL port, add additional parameter for the driver
-    app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']+"Security=SSL;"
-else:
-    app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']
-
+app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI+"Security=SSL;"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['SQLALCHEMY_ECHO']=False
 
 # Configure access to App ID service for the OpenID Connect client
-appID_clientinfo=ClientMetadata(client_id=appIDInfo['clientId'],client_secret=appIDInfo['secret'])
-appID_config = ProviderConfiguration(issuer=appIDInfo['oauthServerUrl'],client_metadata=appID_clientinfo)
+appID_clientinfo=ClientMetadata(client_id=APPID_CLIENT_ID,client_secret=APPID_SECRET)
+appID_config = ProviderConfiguration(issuer=APPID_OAUTH_SERVER_URL,client_metadata=appID_clientinfo)
 
 # Initialize OpenID Connect client
 auth=OIDCAuthentication({'default': appID_config}, app)
@@ -431,11 +423,11 @@ def dashboard_display_session():
 
     # Configure result for DDE initialization
     body={ "expiresIn": expiration, "webDomain" : request.url_root }
-    ddeUri=DDE['api_endpoint_url']+'v1/session'
+    ddeUri=DDE_API_ENDPOINT_URL+'v1/session'
     # Obtain new session code from DDE
-    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
+    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE_CLIENT_ID, DDE_CLIENT_SECRET), headers={'Content-Type': 'application/json'})
     # All data in place, return it back to the client
-    return jsonify(sessionData=json.loads(res.text), dashboard=dboard, ddeAPIUrl=DDE['api_endpoint_url']), 201
+    return jsonify(sessionData=json.loads(res.text), dashboard=dboard, ddeAPIUrl=DDE_API_ENDPOINT_URL), 201
 
 
 # Initialize session to display a canned DDE dashboard
@@ -480,11 +472,11 @@ def dashboard_edit_session():
 
     # Setup request to DDE for new session code
     body={ "expiresIn": expiration, "webDomain" : request.url_root }
-    ddeUri=DDE['api_endpoint_url']+'v1/session'
+    ddeUri=DDE_API_ENDPOINT_URL+'v1/session'
     # Obtain new session code from DDE
-    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
+    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE_CLIENT_ID, DDE_CLIENT_SECRET), headers={'Content-Type': 'application/json'})
     # Ok, return the session code and CSV data source information as JSON
-    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats, ddeAPIUrl=DDE['api_endpoint_url']), 201
+    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats, ddeAPIUrl=DDE_API_ENDPOINT_URL), 201
 
 
 
@@ -708,6 +700,126 @@ def error(error=None, error_description=None):
     return jsonify({'error': error, 'message': error_description})
 
 
+
+# New section with previously Cloud Functions / serverless functionality
+# Collect statistics from GitHub
+#
+#######
+# SQL statements
+#
+# fetch all users
+allTenantsStatement="select tid, ghuser, ghtoken from tenants"
+# fetch all repos for a given userID
+allReposStatement="select r.rid, ghu.username, r.rname from tenantrepos tr,repos r, ghorgusers ghu where tr.rid=r.rid and r.oid=ghu.oid and tr.tid=?"
+
+# merge the view traffic data
+mergeViews1="merge into repotraffic rt using (values"
+mergeViews2=""") as nv(rid,viewdate,viewcount,uniques) on rt.rid=nv.rid and rt.tdate=nv.viewdate
+            when matched and nv.viewcount>rt.viewcount then update set viewcount=nv.viewcount, vuniques=coalesce(nv.uniques,0)
+            when not matched then insert (rid,tdate,viewcount, vuniques) values(nv.rid,nv.viewdate,coalesce(nv.viewcount,0),coalesce(nv.uniques,0))
+            else ignore"""
+
+# merge the clone traffic data
+mergeClones1="merge into repotraffic rt using (values"
+mergeClones2=""") as nc(rid,clonedate,clonecount,uniques) on rt.rid=nc.rid and rt.tdate=nc.clonedate
+             when matched and nc.clonecount>rt.clonecount then update set clonecount=nc.clonecount, cuniques=coalesce(nc.uniques,0)
+             when not matched then insert (rid,tdate,clonecount,cuniques) values(nc.rid,nc.clonedate,coalesce(nc.clonecount,0),coalesce(nc.uniques,0))
+             else ignore"""
+
+# new syslog record
+insertLogEntry="insert into systemlog values(?,?,?,?)"
+
+# Merge view data into the traffic table
+def mergeViewData(viewStats, rid, conn):
+    # convert traffic data into SQL values
+    data=""
+    for vday in viewStats['views']:
+        data+="("+str(rid)+",'"+vday['timestamp'][:10]+"',"+str(vday['count'])+","+str(vday['uniques'])+"),"
+    mergeStatement=mergeViews1+data[:-1]+mergeViews2
+    conn.execute(mergeStatement)
+
+
+# Merge clone data into the traffic table
+def mergeCloneData(cloneStats, rid, conn):
+    # convert traffic data into SQL values
+    data=""
+    for cday in cloneStats['clones']:
+        data+="("+str(rid)+",'"+cday['timestamp'][:10]+"',"+str(cday['count'])+","+str(cday['uniques'])+"),"
+    mergeStatement=mergeClones1+data[:-1]+mergeClones2
+    # execute MERGE statement
+    conn.execute(mergeStatement)
+
+
+# Overall flow:
+# - loop over users
+#   - log in to GitHub as that current user
+#   - retrieve repos for that current user, loop the repos
+#     - for each repo fetch stats
+#     - merge traffic data into table
+#  update last run info
+
+def collectStatistics():
+    repoCount=0
+    processedRepos=0
+    logtext="collectStats ("
+    errortext=""
+
+    connection = db.engine.connect()
+    trans = connection.begin()
+    try:
+        # go over all system users
+        allTenants=connection.execute(allTenantsStatement)
+        for row in allTenants:
+
+            # prepare statement for logging
+            #logStmt = ibm_db.prepare(conn, insertLogEntry)
+        
+            # go over all repos managed by that user and fetch traffic data
+            # first, login to GitHub as that user
+            tid=row["tid"]
+            
+            gh = github.GitHub(username=row["ghuser"],  access_token=row["ghtoken"])
+
+            userRepoCount=0
+            # prepare and execute statement to fetch related repositories
+            repos=connection.execute(allReposStatement,tid)
+            for row in repos:
+                repoCount=repoCount+1
+                # fetch view and clone traffic
+                try:
+                    viewStats=gh.repos(row["username"], row["rname"]).traffic.views.get()
+                    cloneStats=gh.repos(row["username"], row["rname"]).traffic.clones.get()
+                    if viewStats['views']:
+                        mergeViewData(viewStats,row["rid"], connection)
+                    if cloneStats['clones']:
+                        mergeCloneData(cloneStats,row["rid"], connection)
+                    userRepoCount=userRepoCount+1
+                    # For debugging:
+                    # print repo["USERNAME"]+" "+ repo["RNAME"]
+
+                    # update global repo counter
+                    processedRepos=processedRepos+1
+                    # fetch next repository
+                except:
+                    errortext=errortext+str(row["rid"])+" "
+                
+            # insert log entry
+            ts = time.gmtime()
+            logtext=logtext+str(processedRepos)+"/"+str(repoCount)+")"
+            if errortext !="":
+                logtext=logtext+", repo errors: "+errortext
+            result=connection.execute(insertLogEntry,(tid,time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,logtext))
+        trans.commit()
+    except:
+        trans.rollback()
+        raise
+    return {"repoCount": repoCount}
+
+@app.route('/admin/collectStats')
+def collectStats():
+    res=collectStatistics()
+    return render_template('collect.html',repoCount=res["repoCount"])
+
 port = os.getenv('PORT', '5000')
 if __name__ == "__main__":
-	app.run(host='0.0.0.0', port=int(port))
+	app.run(port=int(port))
