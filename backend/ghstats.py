@@ -129,7 +129,10 @@ app.config.update({'OIDC_REDIRECT_URI': os.getenv('FULL_HOSTNAME')+'/redirect_ur
 
 # General setup based on the obtained configuration
 # Configure database access
-app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI
+if "50000" in DB2_URI:
+    app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI
+else:
+    app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI+"Security=SSL;"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['SQLALCHEMY_ECHO']=False
 
