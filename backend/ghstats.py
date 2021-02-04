@@ -31,6 +31,7 @@ from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMet
 
 # Database access using SQLAlchemy
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.pool import NullPool
 
 # Advanced security
 from flask_talisman import Talisman, ALLOW_FROM
@@ -79,6 +80,7 @@ DDE_API_ENDPOINT_URL=None
 DDE_CLIENT_ID=None
 DDE_CLIENT_SECRET=None
 FULL_HOSTNAME=None
+EVENT_TOKEN=None
 
 # First, check for any service bindings
 if 'VCAP_SERVICES' in os.environ:
@@ -118,7 +120,8 @@ DDE_API_ENDPOINT_URL=os.getenv("DDE_API_ENDPOINT_URL", DDE_API_ENDPOINT_URL)
 DDE_CLIENT_ID=os.getenv("DDE_CLIENT_ID", DDE_CLIENT_SECRET)
 DDE_CLIENT_SECRET=os.getenv("DDE_CLIENT_SECRET", DDE_CLIENT_SECRET)
 
-
+# Event settings
+EVENT_TOKEN=os.getenv("EVENT_TOKEN","CE_rulez")
 
 # Update Flask configuration
 #'SERVER_NAME': os.getenv("HOSTNAME"),
@@ -228,7 +231,6 @@ def secondstep():
     username=request.form['username']
     ghuser=request.form['ghuser']
     ghtoken=request.form['ghtoken']
-    dbstmtstring=None
     sqlfile = open('database.sql', 'r')  # read the file line by line into array
     sqlcode = ''
     for line in sqlfile:
@@ -349,7 +351,6 @@ def newrepo():
         trans = connection.begin()
         try:
             tid=None
-            aid=None
             rid=None
             orgid=None
             ghstmt="""select atrr.tid, au.aid,t.ghuser,t.ghtoken
@@ -362,7 +363,6 @@ def newrepo():
             githubinfo = connection.execute(ghstmt,flask.session['id_token']['email'])
             for row in githubinfo:
                 tid=row['tid']
-                aid=row['aid']
             orgidinfo = connection.execute("select oid from ghorgusers where username=?",orgname)
             for row in orgidinfo:
                 orgid=row['oid']
@@ -403,14 +403,14 @@ def deleterepo():
         trans = connection.begin()
         try:
             # delete the repo record
-            result = connection.execute("delete from repos where rid=?",repoid)
+            connection.execute("delete from repos where rid=?",repoid)
             # delete the relationship information
-            result = connection.execute("delete from tenantrepos where rid=?",repoid)
+            connection.execute("delete from tenantrepos where rid=?",repoid)
             # delete the role information
-            result = connection.execute("delete from admintenantreporoles where rid=?",repoid)
+            connection.execute("delete from admintenantreporoles where rid=?",repoid)
             # delete related traffic data
             # IDEA: This app could be extended to ask whether to keep this data.
-            result = connection.execute("delete from repotraffic where rid=?",repoid)
+            connection.execute("delete from repotraffic where rid=?",repoid)
 
             trans.commit()
         except:
@@ -657,7 +657,6 @@ def api_generate_repostats():
         for row in result:
             yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
-    resp = make_response(render_template('list.html', entries=entries))
 
 
 # Handle password verification our way:
@@ -796,12 +795,11 @@ def mergeCloneData(cloneStats, rid, conn):
 #     - merge traffic data into table
 #  update last run info
 
-def collectStatistics():
+def collectStatistics(logPrefix="collectStats"):
     repoCount=0
     processedRepos=0
-    logtext="collectStats ("
+    logtext=logPrefix+" ("
     errortext=""
-
     connection = db.engine.connect()
     trans = connection.begin()
     try:
@@ -846,7 +844,7 @@ def collectStatistics():
             logtext=logtext+str(processedRepos)+"/"+str(repoCount)+")"
             if errortext !="":
                 logtext=logtext+", repo errors: "+errortext
-            result=connection.execute(insertLogEntry,(tid,time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,logtext))
+            connection.execute(insertLogEntry,(tid,time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,logtext))
         trans.commit()
     except:
         trans.rollback()
@@ -854,9 +852,22 @@ def collectStatistics():
     return {"repoCount": repoCount}
 
 @app.route('/admin/collectStats')
+@auth.oidc_auth('default')
 def collectStats():
-    res=collectStatistics()
+    res=collectStatistics(logPrefix='collectStats')
     return render_template('collect.html',repoCount=res["repoCount"])
+
+# Ping subscription in Code Engine
+# Check for secret token
+# Return immediately, but perform processing in the background
+@app.route('/api/ping/collectStats', methods=['POST'])
+def eventCollectStats():
+    if request.form['token']==EVENT_TOKEN:
+        res=collectStatistics(logPrefix='CEping')
+        return jsonify(message="success - stats collected", repoCount=res["repoCount"])
+    else:
+        return jsonify(message="no success")
+
 
 port = os.getenv('PORT', '5000')
 if __name__ == "__main__":
