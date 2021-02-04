@@ -1,21 +1,13 @@
-FROM python:3.7-slim AS compile-image
-RUN apt-get update
-RUN apt-get install -y --no-install-recommends build-essential gcc
+FROM python:3
 
-RUN python -m venv /opt/venv
-# Make sure we use the virtualenv:
-ENV PATH="/opt/venv/bin:$PATH"
-
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+WORKDIR /app
+COPY /requirements.txt requirements.txt
 
 
-FROM python:3.7-slim AS build-image
-COPY --from=compile-image /opt/venv /opt/venv
-COPY . .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Make sure we use the virtualenv:
-ENV PATH="/opt/venv/bin:$PATH"
+COPY . /app
+
 EXPOSE 8080
 ENTRYPOINT [ "python"]
 CMD ["ghstats.py" ]

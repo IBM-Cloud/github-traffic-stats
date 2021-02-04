@@ -68,33 +68,68 @@ csp = {
 }
 talisman=Talisman(app, content_security_policy=csp)
 
-# Read variables
-# There are from local .env or provided through K8s secrets
+# Read the configuration and possible environment variables
+# There are from local .env, provided through K8s secrets or
+# through service bindings.
+DB2_URI=None
+APPID_CLIENT_ID=None
+APPID_OAUTH_SERVER_URL=None
+APPID_SECRET=None
+DDE_API_ENDPOINT_URL=None
+DDE_CLIENT_ID=None
+DDE_CLIENT_SECRET=None
+FULL_HOSTNAME=None
+
+# First, check for any service bindings
+if 'VCAP_SERVICES' in os.environ:
+    vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
+
+    # Db2, either Db2 Warehouse or Db2
+    if 'dashDB' in vcapEnv:
+        DB2_URI=vcapEnv['dashDB'][0]['credentials']['uri']
+    elif 'dashDB For Transactions' in vcapEnv:
+        DB2_URI=vcapEnv['dashDB For Transactions'][0]['credentials']['uri']
+    
+    # AppID
+    if 'AppID' in vcapEnv:
+       appIDInfo = vcapEnv['AppID'][0]['credentials']
+       APPID_CLIENT_ID=appIDInfo['clientId']
+       APPID_OAUTH_SERVER_URL=appIDInfo['oauthServerUrl']
+       APPID_SECRET=appIDInfo['secret']
+    
+    if 'dynamic-dashboard-embedded' in vcapEnv:
+       DDE=vcapEnv['dynamic-dashboard-embedded'][0]['credentials']
+       DDE_CLIENT_ID=DDE['client_id']
+       DDE_CLIENT_SECRET=DDE['client_secret']
+       DDE_API_ENDPOINT_URL=DDE['api_endpoint_url']
+
+# Now, check for any overwritten environment settings. 
 
 # Obtain configuration for Db2 Warehouse database
-DB2_URI=os.getenv("DB2_URI")
+DB2_URI=os.getenv("DB2_URI", DB2_URI)
 
 # AppID settings
-APPID_CLIENT_ID=os.getenv("APPID_CLIENT_ID")
-APPID_OAUTH_SERVER_URL=os.getenv("APPID_OAUTH_SERVER_URL")
-APPID_SECRET=os.getenv("APPID_SECRET")
+APPID_CLIENT_ID=os.getenv("APPID_CLIENT_ID", APPID_CLIENT_ID)
+APPID_OAUTH_SERVER_URL=os.getenv("APPID_OAUTH_SERVER_URL", APPID_OAUTH_SERVER_URL)
+APPID_SECRET=os.getenv("APPID_SECRET", APPID_SECRET)
 
 # DDE settings
-DDE_API_ENDPOINT_URL=os.getenv("DDE_API_ENDPOINT_URL")
-DDE_CLIENT_ID=os.getenv("DDE_CLIENT_ID")
-DDE_CLIENT_SECRET=os.getenv("DDE_CLIENT_SECRET")
+DDE_API_ENDPOINT_URL=os.getenv("DDE_API_ENDPOINT_URL", DDE_API_ENDPOINT_URL)
+DDE_CLIENT_ID=os.getenv("DDE_CLIENT_ID", DDE_CLIENT_SECRET)
+DDE_CLIENT_SECRET=os.getenv("DDE_CLIENT_SECRET", DDE_CLIENT_SECRET)
+
+
 
 # Update Flask configuration
 #'SERVER_NAME': os.getenv("HOSTNAME"),
 app.config.update({'OIDC_REDIRECT_URI': os.getenv('FULL_HOSTNAME')+'/redirect_uri',
                    'SECRET_KEY': 'my_not_so_dirty_secret_key',
-#                   'PREFERRED_URL_SCHEME': 'https',
                    'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
                    'DEBUG': os.getenv("FLASK_DEBUG", False)})
 
 # General setup based on the obtained configuration
 # Configure database access
-app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI+"Security=SSL;"
+app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['SQLALCHEMY_ECHO']=False
 
@@ -822,4 +857,4 @@ def collectStats():
 
 port = os.getenv('PORT', '5000')
 if __name__ == "__main__":
-	app.run(port=int(port))
+	app.run(host='0.0.0.0',port=int(port))
