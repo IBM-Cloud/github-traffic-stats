@@ -9,7 +9,7 @@
 # For the database schema see the file database.sql
 #
 # Written by Henrik Loeser (data-henrik), hloeser@de.ibm.com
-# (C) 2018 by IBM
+# (C) 2018-2021 by IBM
 
 import flask, os, json, datetime, decimal, re, requests, time
 
@@ -25,7 +25,6 @@ import github
 # everything Flask for this app
 from flask import (Flask, jsonify, make_response, redirect,request,
 		   render_template, url_for, Response, stream_with_context)
-from flask_httpauth import HTTPBasicAuth
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
 from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata
 
@@ -35,10 +34,6 @@ from sqlalchemy.pool import NullPool
 
 # Advanced security
 from flask_talisman import Talisman, ALLOW_FROM
-
-# Authentication for DDE, based on token
-from itsdangerous import (TimedJSONWebSignatureSerializer
-                          as Serializer, BadSignature, SignatureExpired)
 
 # load environment
 load_dotenv()
@@ -57,6 +52,7 @@ csp = {
         'cdn.datatables.net',
         '*.ibm.com'
     ],
+    'img-src': '*',
     'script-src': [
         '\'self\'',
         '\'unsafe-inline\'',
@@ -76,9 +72,6 @@ DB2_URI=None
 APPID_CLIENT_ID=None
 APPID_OAUTH_SERVER_URL=None
 APPID_SECRET=None
-DDE_API_ENDPOINT_URL=None
-DDE_CLIENT_ID=None
-DDE_CLIENT_SECRET=None
 FULL_HOSTNAME=None
 EVENT_TOKEN=None
 
@@ -99,12 +92,6 @@ if 'VCAP_SERVICES' in os.environ:
        APPID_OAUTH_SERVER_URL=appIDInfo['oauthServerUrl']
        APPID_SECRET=appIDInfo['secret']
     
-    if 'dynamic-dashboard-embedded' in vcapEnv:
-       DDE=vcapEnv['dynamic-dashboard-embedded'][0]['credentials']
-       DDE_CLIENT_ID=DDE['client_id']
-       DDE_CLIENT_SECRET=DDE['client_secret']
-       DDE_API_ENDPOINT_URL=DDE['api_endpoint_url']
-
 # Now, check for any overwritten environment settings. 
 
 # Obtain configuration for Db2 Warehouse database
@@ -114,11 +101,6 @@ DB2_URI=os.getenv("DB2_URI", DB2_URI)
 APPID_CLIENT_ID=os.getenv("APPID_CLIENT_ID", APPID_CLIENT_ID)
 APPID_OAUTH_SERVER_URL=os.getenv("APPID_OAUTH_SERVER_URL", APPID_OAUTH_SERVER_URL)
 APPID_SECRET=os.getenv("APPID_SECRET", APPID_SECRET)
-
-# DDE settings
-DDE_API_ENDPOINT_URL=os.getenv("DDE_API_ENDPOINT_URL", DDE_API_ENDPOINT_URL)
-DDE_CLIENT_ID=os.getenv("DDE_CLIENT_ID", DDE_CLIENT_SECRET)
-DDE_CLIENT_SECRET=os.getenv("DDE_CLIENT_SECRET", DDE_CLIENT_SECRET)
 
 # Event settings
 EVENT_TOKEN=os.getenv("EVENT_TOKEN","CE_rulez")
@@ -145,8 +127,6 @@ appID_config = ProviderConfiguration(issuer=APPID_OAUTH_SERVER_URL,client_metada
 
 # Initialize OpenID Connect client
 auth=OIDCAuthentication({'default': appID_config}, app)
-# Initialize BasicAuth, needed for token access to data
-basicauth = HTTPBasicAuth()
 
 # Initialize SQLAlchemy for our database
 db = SQLAlchemy(app, session_options={'autocommit': True})
@@ -420,124 +400,6 @@ def deleterepo():
     else:
         return jsonify(message="Error: no repository deleted") # should go to error or info page
 
-
-# Initialize session to display a canned DDE dashboard
-@app.route('/api/v1/dashboard_display_session', methods=['POST'])
-@auth.oidc_auth('default')
-def dashboard_display_session():
-    # For DDE-based data access we are going to use token-based Basic Auth
-    # In the following, encode the session user's email into a time-limited
-    # access token.
-
-    # 1 hour expiration time for data access
-    expiration=3600
-    # New token generator, initialize with expiration time
-    s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
-    # generate a new token based on the email address
-    token=s.dumps({'id': flask.session['id_token']['email']})
-    # encode it for Basic Auth usage
-    token_string=token.decode('ascii')+":Iamatoken"
-    enctoken=b64encode(token_string.encode()).decode("ascii")
-
-    # Load the dashboard specification from JSON file - this could be stored in
-    # the database, too.
-    with open('dashboard.json') as dashboardFile:
-        # load JSON data from file, this is the dashboard spec
-        dboard=json.load(dashboardFile)
-
-    # This looks ugly and, yes,  it is... :)
-    # Replace the value for Basic Auth within the dashboard specification
-    [item for item in dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['property']
-        if item['name']=='headers'][0]['value'][0]['value']="Basic "+enctoken
-    # Replace the value for sourceUrl within the dashboard specification
-    dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['sourceUrl']=request.url_root+"api/v1/data/repositorystats.csv"
-
-    # For debugging - obtain the changed value for Authorization and print it:
-    # vals=[item for item in dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['property']
-    #         if item['name']=='headers'][0]['value'][0]['value']
-    # print(vals)
-    # dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['sourceUrl']
-
-
-    # Configure result for DDE initialization
-    body={ "expiresIn": expiration, "webDomain" : request.url_root }
-    ddeUri=DDE_API_ENDPOINT_URL+'v1/session'
-    # Obtain new session code from DDE
-    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE_CLIENT_ID, DDE_CLIENT_SECRET), headers={'Content-Type': 'application/json'})
-    # All data in place, return it back to the client
-    return jsonify(sessionData=json.loads(res.text), dashboard=dboard, ddeAPIUrl=DDE_API_ENDPOINT_URL), 201
-
-
-# Initialize session to display a canned DDE dashboard
-@app.route('/api/v1/dashboard_edit_session', methods=['POST'])
-@auth.oidc_auth('default')
-def dashboard_edit_session():
-    # For DDE-based data access we are going to use token-based Basic Auth
-    # In the following, encode the session user's email into a time-limited
-    # access token.
-    expiration=3600
-    s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
-    token=s.dumps({'id': flask.session['id_token']['email']})
-    token_string=token.decode('ascii')+":Iamatoken"
-    enctoken=b64encode(token_string.encode()).decode("ascii")
-
-    # Define a CSV data source for DDEcsvStats
-    # The sourceUrl and the authentication are dynamically generated
-    DDEcsvStats = {
-        "xsd": "https://ibm.com/daas/module/1.0/module.xsd",
-        "source": { "id": "Repostats",
-                    "srcUrl": { "sourceUrl": request.url_root+"api/v1/data/repositorystats.csv", "mimeType": "text/csv",
-                                "property": [
-                                        { "name": "separator", "value": ", " },
-                                        { "name": "ColumnNamesLine", "value": "true" },
-                                        { "name": "headers", "value": [{"name": "Authorization", "value": "Basic "+enctoken}]}
-                                    ]
-                                }
-                  },
-        "table": { "name": "repositorystats", "description": "Traffic data for repositories",
-              "column": [
-                    { "name": "RID", "description": "repository ID", "datatype": "INTEGER", "nullable": "false", "label": "Repository ID", "usage": "identifier", "regularAggregate": "countDistinct"},
-                    { "name": "ORGNAME", "description": "Organization or user", "datatype": "VARCHAR(255)", "nullable": "false", "label": "organization or user", "usage": "identifier", "regularAggregate": "countDistinct" },
-                    { "name": "REPONAME", "description": "repository name","datatype": "VARCHAR(255)", "nullable": "false", "label": "repository name", "usage": "fact", "regularAggregate": "total" },
-                    { "name": "TDATE", "description": "traffic date", "datatype": "DATE", "nullable": "false", "label": "traffic date", "usage": "identifier", "regularAggregate": "countDistinct", "taxonomyFamily": "cDate" },
-                    { "name": "VIEWCOUNT", "datatype": "INTEGER", "nullable": "false", "label": "count of views", "usage": "fact", "regularAggregate": "total" },
-                    { "name": "VUNIQUES", "datatype": "INTEGER", "nullable": "false", "label": "unique views", "usage": "fact", "regularAggregate": "total" },
-                    { "name": "CLONECOUNT", "datatype": "INTEGER", "nullable": "false", "label": "count of clones", "usage": "fact", "regularAggregate": "total" },
-                    { "name": "CUNIQUES", "datatype": "INTEGER", "nullable": "false", "label": "unique counts", "usage": "fact", "regularAggregate": "total" } ]
-                },
-        "label": "Repository Traffic Data",
-        "identifier": "Repostats" }
-
-    # Setup request to DDE for new session code
-    body={ "expiresIn": expiration, "webDomain" : request.url_root }
-    ddeUri=DDE_API_ENDPOINT_URL+'v1/session'
-    # Obtain new session code from DDE
-    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE_CLIENT_ID, DDE_CLIENT_SECRET), headers={'Content-Type': 'application/json'})
-    # Ok, return the session code and CSV data source information as JSON
-    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats, ddeAPIUrl=DDE_API_ENDPOINT_URL), 201
-
-
-
-# Display a canned DDE dashboard
-@app.route('/repos/dashboard')
-@auth.oidc_auth('default')
-def dashboard():
-    if isTenant() or isTenantViewer() or isRepoViewer():
-        return render_template('dashboard.html')
-    else:
-        return render_template('notavailable.html', message="You are not authorized.")
-
-# Create a new DDE dashboard
-@app.route('/repos/newdashboard')
-@auth.oidc_auth('default')
-def new_dashboard():
-    if isTenant():
-        return render_template('dashboardnew.html')
-    else:
-        return render_template('notavailable.html', message="You are not authorized.")
-
-
-
 # return the currently active user as csv file
 @app.route('/data/user.csv')
 @auth.oidc_auth('default')
@@ -647,37 +509,6 @@ def generate_repostats():
                 yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
 
-# Return statistics for use in DDE
-@app.route('/api/v1/data/repositorystats.csv')
-@basicauth.login_required
-def api_generate_repostats():
-    def generate():
-        yield "RID,ORGNAME,REPONAME,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
-        result = db.engine.execute(statsFullOrgStmt,flask.g.email)
-        for row in result:
-            yield ','.join(map(str,row)) + '\n'
-    return Response(stream_with_context(generate()), mimetype='text/csv')
-
-
-# Handle password verification our way:
-# Check that the token is valid and ignore the password
-@basicauth.verify_password
-def verify_password(token, nopassword):
-    # Need the serializer
-    s = Serializer(app.config['SECRET_KEY'])
-    try:
-        # Ok, check for a valid token and extract the data
-        data = s.loads(token)
-    except SignatureExpired:
-        # valid token, but expired
-        return False
-    except BadSignature:
-        # invalid token
-        return False
-    # all well, set the email for use in the csv generator functions
-    flask.g.email = data['id']
-    return True
-
 # Generate list of repositories for web page, dynamically loaded
 @app.route('/data/repositories.txt')
 @auth.oidc_auth('default')
@@ -701,18 +532,6 @@ def generate_data_repolist_txt():
 def generate_repolist():
     def generate():
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
-        yield "RID,ORGNAME,REPONAME\n"
-        for row in result:
-            yield ','.join(map(str,row)) + '\n'
-    return Response(stream_with_context(generate()), mimetype='text/csv')
-
-# Export repositories as CSV file
-# CURRENTLY NOT IN USE, but could be used by DDE dashboard
-@app.route('/api/v1/data/repositories.csv')
-@basicauth.login_required
-def api_generate_repolist():
-    def generate():
-        result = db.engine.execute(repolist_stmt,flask.g.email)
         yield "RID,ORGNAME,REPONAME\n"
         for row in result:
             yield ','.join(map(str,row)) + '\n'
@@ -860,15 +679,19 @@ def collectStats():
 # Ping subscription in Code Engine
 # Check for secret token
 # Return immediately, but perform processing in the background
-@app.route('/api/ping/collectStats', methods=['POST'])
+@app.route('/collectStats', methods=['POST'])
+@talisman(force_https=False)
 def eventCollectStats():
-    if request.form['token']==EVENT_TOKEN:
+    mydata=request.json
+    if mydata['token']==EVENT_TOKEN:
         res=collectStatistics(logPrefix='CEping')
-        return jsonify(message="success - stats collected", repoCount=res["repoCount"])
+        return jsonify(message="success - stats collected", repoCount=res["repoCount"]),200
     else:
-        return jsonify(message="no success")
+        return "no success",403
 
 
+# Start the actual app
+# Get the PORT from environment
 port = os.getenv('PORT', '5000')
 if __name__ == "__main__":
 	app.run(host='0.0.0.0',port=int(port))
