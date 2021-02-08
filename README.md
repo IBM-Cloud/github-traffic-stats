@@ -28,6 +28,13 @@ Many of the Code Engine-related steps can be performed in the UI (console), all 
 - set up daily collection of traffic data by creating a subscription, e.g, `ibmcloud ce subscription ping create --name dailyStats --destination APPNAME --path /collectStats --schedule '0 6 * * *' --data '{"token":"value_from_EVENT_TOKEN"}'`
 
 
+## Highlights
+The app utilizes IBM Cloud AppID for authentication. It is based on OpenID Connect 2.0. The authenticated users are matched against profiles in the backend database for authorization. This allows partial data view and multi-tenancy.
+
+Daily and weekly data view in tables and some basic charting are fed asynchronously using AJAX callbacks to the app and implemented data APIs.
+
+![charting](screenshots/Charting.png)
+
 ## Related blogs
 * [Tutorial: GitHub Traffic Analytics with Cloud Functions and Cloud Foundry](https://www.ibm.com/blogs/bluemix/2018/04/tutorial-github-traffic-analytics/)
 * [Use Db2 and IBM Cloud to analyze GitHub traffic data (tutorial)](http://blog.4loeser.net/2018/04/use-db2-and-ibm-cloud-to-analyze-github.html)
