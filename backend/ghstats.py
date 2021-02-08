@@ -63,7 +63,7 @@ csp = {
         '*.ibm.com'
     ]
 }
-talisman=Talisman(app, content_security_policy=csp)
+#talisman=Talisman(app, content_security_policy=csp)
 
 # Read the configuration and possible environment variables
 # There are from local .env, provided through K8s secrets or
@@ -680,7 +680,7 @@ def collectStats():
 # Check for secret token
 # Return immediately, but perform processing in the background
 @app.route('/collectStats', methods=['POST'])
-@talisman(force_https=False)
+#@talisman(force_https=False)
 def eventCollectStats():
     mydata=request.json
     if mydata['token']==EVENT_TOKEN:
@@ -688,6 +688,42 @@ def eventCollectStats():
         return jsonify(message="success - stats collected", repoCount=res["repoCount"]),200
     else:
         return "no success",403
+
+
+# return the repository statistics for the web page, dynamically loaded
+@app.route('/data/repostats.json')
+@auth.oidc_auth('default')
+def generate_data_repostats_json():
+    values=[]
+    datasets=[]
+    if isTenant() or isTenantViewer() or isRepoViewer():
+        fetchStmt="""select r.rid, r.tdate, r.viewcount
+                     from repotraffic r, v_adminuserrepos v
+                     where r.rid=v.rid
+                     and v.email=?
+                     and r.tdate between (current date - 1 month) and (current date)
+                     order by r.rid, r.tdate asc"""
+
+        repoStmt="""select r.rid, r.rname from repos r, v_adminuserrepos v
+                    where r.rid=v.rid
+                    and v.email=?
+                    order by rid asc"""
+        result = db.engine.execute(fetchStmt,flask.session['id_token']['email'])
+        for row in result:
+            values.append({'x':row['tdate'].isoformat(),'y':row['viewcount'], 'id':row['rid']})
+
+        repos = db.engine.execute(repoStmt,flask.session['id_token']['email']).fetchall()
+        for row in repos:
+            rdict=[d for d in values if d['id'] == row['rid']]
+            datasets.append({'data': rdict, 'label': row['rname']})
+
+    return jsonify(labels=[], data=datasets)
+
+
+@app.route('/repos/linechart')
+@auth.oidc_auth('default')
+def linechart():
+    return render_template('chart.html')
 
 
 # Start the actual app

@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+{% block title %}
+<title>Chart - GitHub Traffic Analytics</title>
+{% endblock %}
+
+{% block body %}
+<div class="container">
+    <div class="column is-full">
+      <p class="title">Chart: Month in review - Daily viewcounts</p>
+  
+    <canvas id="chart" ></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_javascripts %}
+<script src="{{ url_for('static', filename='jquery-3.3.1.min.js')}}"></script>
+<script src="{{ url_for('static', filename='Chart.bundle.min.js')}}"></script>
+<script src="{{ url_for('static', filename='chartjs-plugin-colorschemes.min.js')}}"></script>
+
+
+<script>
+
+Chart.defaults.global.tooltipYPadding = 16;
+Chart.defaults.global.tooltipCornerRadius = 0;
+Chart.defaults.global.tooltipTitleFontStyle = "normal";
+Chart.defaults.global.scaleFontSize = 16;
+
+// get chart canvas
+var mychart = document.getElementById("chart").getContext("2d");
+
+// draw chart
+var LineChart = new Chart(mychart,
+                  {
+                    type: 'line', 
+                    data: { 
+                      labels: [],
+                      datasets : [{data:[]}],
+                    },
+                    options: {
+                      elements: { 
+                        line: {
+                          tension: 0,
+                          fill: false}},
+                      scales: {
+                        xAxes: [{
+                          type: 'time',
+                          time: {
+                            unit: 'day'
+                          }
+                        }]
+                      },
+                      plugins: {
+                        colorschemes: {
+                          scheme: 'brewer.Paired12'
+                        }
+                      }
+                    }
+                  });
+
+ajax_chart(LineChart);
+
+// function to update our chart
+function ajax_chart(chart, data) {
+    var data = data || {};
+
+    $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+    $.getJSON($SCRIPT_ROOT+"/data/repostats.json", data).done(function(response) {
+        chart.data.labels = response.labels;
+        chart.data.datasets = response.data; 
+        chart.update(); 
+    });
+};
+
+</script>
+  {% endblock %}
