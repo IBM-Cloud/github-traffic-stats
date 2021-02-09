@@ -17,8 +17,8 @@ Many of the Code Engine-related steps can be performed in the UI (console), all 
 - cd into the backend directory
 - create a Code Engine project
 - create an AppID and Db2 service instance (lite plan is ok)
-- build the Docker image, e.g. using `ibmcloud cr build`
 - register the container registry in Code Engine
+- build the Docker image, e.g. using `ibmcloud cr build` or by using `ibmcloud ce build` / `ibmcloud ce buildrun`
 - copy [.env.template](backend/.env.template) to .env. Edit it, remove unused lines. The minimum to change is FULL_HOSTNAME and EVENT_TOKEN. See below on service binding
 - Create a Code Engine secret from the .env file, e.g., `ibmcloud ce secret create -name SERCRETNAME --from-env-file .env`
 - deploy the app (Docker container) to Code Engine, use the secret from before, e.g., `ibmcloud ce app create --name APPNAME --image us.icr.io/namespace/imagename:latest --env-from-secret SECRETNAME --rs REGISTRY_CREDS`. 
