@@ -1,6 +1,6 @@
 flask_talisman==0.7.0
 Flask_SQLAlchemy==2.4.4
-flask==1.1.1
+Flask==1.1.1
 requests==2.20.0
 Flask_pyoidc==3.7.0
 githubpy

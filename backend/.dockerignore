@@ -1,1 +1,4 @@
 .env
+.env.cloud
+.env.template
+ghstatsAPIKEY.json

@@ -148,7 +148,8 @@ def setuserrole(email=None):
             # there should be exactly one matching row
             flask.session['userrole']=row[0]
     except:
-        pass
+        app.logger.error("Db2 error")
+        raise
     return flask.session['userrole']
 
 # Check for userrole
