@@ -12,6 +12,7 @@
 # (C) 2018-2021 by IBM
 
 import flask, os, json, datetime, decimal, re, requests, time
+from functools import wraps
 
 # for loading .env
 from dotenv import load_dotenv
@@ -26,7 +27,7 @@ import github
 from flask import (Flask, jsonify, make_response, redirect,request,
 		   render_template, url_for, Response, stream_with_context)
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
-from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata
+from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata, ProviderMetadata
 
 # Database access using SQLAlchemy
 from flask_sqlalchemy import SQLAlchemy
@@ -74,6 +75,7 @@ APPID_OAUTH_SERVER_URL=None
 APPID_SECRET=None
 FULL_HOSTNAME=None
 EVENT_TOKEN=None
+ALL_CONFIGURED=False
 
 # First, check for any service bindings
 if 'VCAP_SERVICES' in os.environ:
@@ -93,7 +95,6 @@ if 'VCAP_SERVICES' in os.environ:
        APPID_SECRET=appIDInfo['secret']
     
 # Now, check for any overwritten environment settings. 
-
 # Obtain configuration for Db2 Warehouse database
 DB2_URI=os.getenv("DB2_URI", DB2_URI)
 
@@ -105,31 +106,96 @@ APPID_SECRET=os.getenv("APPID_SECRET", APPID_SECRET)
 # Event settings
 EVENT_TOKEN=os.getenv("EVENT_TOKEN","CE_rulez")
 
-# Update Flask configuration
-#'SERVER_NAME': os.getenv("HOSTNAME"),
-app.config.update({'OIDC_REDIRECT_URI': os.getenv('FULL_HOSTNAME')+'/redirect_uri',
-                   'SECRET_KEY': 'my_not_so_dirty_secret_key',
-                   'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
-                   'DEBUG': os.getenv("FLASK_DEBUG", False)})
+# Full hostname
+FULL_HOSTNAME=os.getenv("FULL_HOSTNAME")
 
-# General setup based on the obtained configuration
-# Configure database access
-if "50000" in DB2_URI:
-    app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI
+# is everything configured?
+if (DB2_URI and APPID_CLIENT_ID and APPID_OAUTH_SERVER_URL and APPID_SECRET and FULL_HOSTNAME):
+    ALL_CONFIGURED=True
+
+    # Update Flask configuration
+    #'SERVER_NAME': os.getenv("HOSTNAME"),
+    app.config.update({'OIDC_REDIRECT_URI': os.getenv('FULL_HOSTNAME')+'/redirect_uri',
+                       'SECRET_KEY': 'my_not_so_dirty_secret_key',
+                       'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
+                       'DEBUG': os.getenv("FLASK_DEBUG", False)})
+
+    # General setup based on the obtained configuration
+    # Configure database access
+    if "50000" in DB2_URI:
+        app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI
+    else:
+        app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI+"Security=SSL;"
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
+    app.config['SQLALCHEMY_ECHO']=False
+
+    # Configure access to App ID service for the OpenID Connect client
+    appID_clientinfo=ClientMetadata(client_id=APPID_CLIENT_ID,client_secret=APPID_SECRET)
+    appID_config = ProviderConfiguration(issuer=APPID_OAUTH_SERVER_URL,client_metadata=appID_clientinfo)
+
+    # Initialize OpenID Connect client
+    auth=OIDCAuthentication({'default': appID_config}, app)
+
+    # Initialize SQLAlchemy for our database
+    db = SQLAlchemy(app, session_options={'autocommit': True})
+
+
+    # Three (3) decorators that wrap the auth decorators. See the comments
+    # in the ELSE for the background
+    def security_decorator_auth(f):        
+        @wraps(f)
+        @auth.oidc_auth('default')
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
+
+    def security_decorator_logout(f):        
+        @wraps(f)
+        @auth.oidc_logout
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
+
+    def security_decorator_error(f):        
+        @wraps(f)
+        @auth.error_view
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
+
+
+    # end of skipped
+    # initial configuration
+    #
 else:
-    app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI+"Security=SSL;"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
-app.config['SQLALCHEMY_ECHO']=False
+    # We are not initialized yet
+    #
+    # Some heavy lifting required...
+    #
+    # Define 3 pseudo decorators that just do nothing.
+    # This way we can have an up and running app if no services are
+    # bound to / passed into the app yet. This allows to have a 
+    # successful deployment even without all the tutorial steps
+    # performed.
+    def security_decorator_auth(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
 
-# Configure access to App ID service for the OpenID Connect client
-appID_clientinfo=ClientMetadata(client_id=APPID_CLIENT_ID,client_secret=APPID_SECRET)
-appID_config = ProviderConfiguration(issuer=APPID_OAUTH_SERVER_URL,client_metadata=appID_clientinfo)
+    def security_decorator_logout(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
 
-# Initialize OpenID Connect client
-auth=OIDCAuthentication({'default': appID_config}, app)
+    def security_decorator_error(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
 
-# Initialize SQLAlchemy for our database
-db = SQLAlchemy(app, session_options={'autocommit': True})
+
 
 # Encoder to handle some raw data correctly
 def alchemyencoder(obj):
@@ -182,7 +248,7 @@ def isRepoViewer():
 # Index page, unprotected to display some general information
 @app.route('/', methods=['GET'])
 def index():
-    return render_template('index.html', startpage=True)
+    return render_template('index.html', startpage=True, configured=ALL_CONFIGURED)
 
 
 # have "unprotected" page with instructions
@@ -197,7 +263,7 @@ def initializeApp():
 
 # Show page for entering user information for first system user and tenant
 @app.route('/admin/firststep', methods=['GET'])
-@auth.oidc_auth('default')
+@security_decorator_auth
 def firststep():
     return render_template('firststep.html')
 
@@ -207,7 +273,7 @@ def firststep():
 # tenant.
 # Called from firststep
 @app.route('/admin/secondstep', methods=['POST'])
-@auth.oidc_auth('default')
+@security_decorator_auth
 def secondstep():
     username=request.form['username']
     ghuser=request.form['ghuser']
@@ -244,7 +310,7 @@ def secondstep():
 
 # Official login URI, redirects to repo stats after processing
 @app.route('/login')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def login():
     if setuserrole(flask.session['id_token']['email'])>0:
         return redirect(url_for('repostatistics'))
@@ -254,20 +320,20 @@ def login():
 # Show a user profile
 @app.route('/user')
 @app.route('/user/profile')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def profile():
     return render_template('profile.html',id=flask.session['id_token'], role=flask.session['userrole'])
 
 # End the session by logging off
 @app.route('/logout')
-@auth.oidc_logout
+@security_decorator_logout
 def logout():
     flask.session['userrole']=None
     return redirect(url_for('index'))
 
 # Form to enter new tenant data
 @app.route('/admin/newtenant')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def newtenant():
     if isAdministrator():
         return render_template('newuser.html')
@@ -277,7 +343,7 @@ def newtenant():
 
 # Show table with system logs
 @app.route('/admin/systemlog')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def systemlog():
     if isSysMaintainer() or isAdministrator():
         return render_template('systemlog.html',)
@@ -286,7 +352,7 @@ def systemlog():
 
 # return page with the repository stats
 @app.route('/repos/stats')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def repostatistics():
     if isTenant() or isTenantViewer() or isRepoViewer():
         # IDEA: expand to limit number of selected days, e.g., past 30 days
@@ -296,7 +362,7 @@ def repostatistics():
 
 # return page with the repository stats
 @app.route('/repos/statsweekly')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def repostatistics_weekly():
     if isTenant() or isTenantViewer() or isRepoViewer():
         # IDEA: expand to limit number of selected days, e.g., past 30 days
@@ -309,7 +375,7 @@ def repostatistics_weekly():
 # Show list of managed repositories
 @app.route('/repos')
 @app.route('/repos/list')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def listrepos():
     if isTenant():
         return render_template('repolist.html')
@@ -318,7 +384,7 @@ def listrepos():
 
 # Process the request to add a new repository
 @app.route('/api/newrepo', methods=['POST'])
-@auth.oidc_auth('default')
+@security_decorator_auth
 def newrepo():
     if isTenant():
         # Access form data from app
@@ -367,7 +433,7 @@ def newrepo():
 
 # Process the request to delete a repository
 @app.route('/api/deleterepo', methods=['POST'])
-@auth.oidc_auth('default')
+@security_decorator_auth
 def deleterepo():
     if isTenant():
         # Access form data from app
@@ -403,7 +469,7 @@ def deleterepo():
 
 # return the currently active user as csv file
 @app.route('/data/user.csv')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_user():
     def generate(email):
         yield "user" + '\n'
@@ -443,7 +509,7 @@ statsWorkWeek="""select r.rid,orgname,reponame,varchar_format(tdate,'YYYY-IW') a
 
 # return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostats.txt')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_repostats_txt():
     def generate():
         yield '{ "data": [\n'
@@ -461,7 +527,7 @@ def generate_data_repostats_txt():
 
 # return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostatsWorkWeek.txt')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_repostatsWorkWeek_txt():
     def generate():
         yield '{ "data": [\n'
@@ -480,7 +546,7 @@ def generate_data_repostatsWorkWeek_txt():
 
 # return the system logs for the web page, dynamically loaded
 @app.route('/data/systemlogs.txt')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_systemlogs_txt():
     if isAdministrator() or isSysMaintainer():
         def generate():
@@ -500,7 +566,7 @@ def generate_data_systemlogs_txt():
 
 # return the repository statistics for the current user as csv file
 @app.route('/data/repostats.csv')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_repostats():
     def generate():
         yield "RID,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
@@ -512,7 +578,7 @@ def generate_repostats():
 
 # Generate list of repositories for web page, dynamically loaded
 @app.route('/data/repositories.txt')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_repolist_txt():
     def generate():
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
@@ -529,7 +595,7 @@ def generate_data_repolist_txt():
 
 # Export repositories as CSV file
 @app.route('/data/repositories.csv')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_repolist():
     def generate():
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
@@ -547,12 +613,12 @@ def static_file(path):
 @app.route('/admin')
 @app.route('/repos')
 @app.route('/data')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def not_available():
     return render_template('notavailable.html')
 
 # error function for auth module
-@auth.error_view
+@security_decorator_error
 def error(error=None, error_description=None):
     return jsonify({'error': error, 'message': error_description})
 
@@ -672,16 +738,14 @@ def collectStatistics(logPrefix="collectStats"):
     return {"repoCount": repoCount}
 
 @app.route('/admin/collectStats')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def collectStats():
     res=collectStatistics(logPrefix='collectStats')
     return render_template('collect.html',repoCount=res["repoCount"])
 
 # Ping subscription in Code Engine
 # Check for secret token
-# Return immediately, but perform processing in the background
 @app.route('/collectStats', methods=['POST'])
-#@talisman(force_https=False)
 def eventCollectStats():
     mydata=request.json
     if mydata['token']==EVENT_TOKEN:
@@ -693,7 +757,7 @@ def eventCollectStats():
 
 # return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostats.json')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_repostats_json():
     values=[]
     datasets=[]
@@ -722,7 +786,7 @@ def generate_data_repostats_json():
 
 
 @app.route('/repos/linechart')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def linechart():
     return render_template('chart.html')
 
