@@ -77,19 +77,20 @@ FULL_HOSTNAME=None
 EVENT_TOKEN=None
 ALL_CONFIGURED=False
 
+
 # First, check for any service bindings
 if 'VCAP_SERVICES' in os.environ:
     vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
 
-    # Db2, either Db2 Warehouse or Db2
-    if 'dashDB' or 'dashdb' in vcapEnv:
-        DB2_URI=vcapEnv['dashDB'][0]['credentials']['uri']
-    elif 'dashDB For Transactions' or 'dashdb-for-transactions' in vcapEnv:
-        DB2_URI=vcapEnv['dashDB For Transactions'][0]['credentials']['uri']
+    # Db2, either Db2 Warehouse or Db2 (lite plan)
+    if 'dashdb' in vcapEnv:
+        DB2_URI=vcapEnv['dashdb'][0]['credentials']['uri']
+    elif 'dashdb-for-transactions' in vcapEnv:
+        DB2_URI=vcapEnv['dashdb-for-transactions'][0]['credentials']['uri']
     
     # AppID
-    if 'AppID' in vcapEnv:
-       appIDInfo = vcapEnv['AppID'][0]['credentials']
+    if 'appid' in vcapEnv:
+       appIDInfo = vcapEnv['appid'][0]['credentials']
        APPID_CLIENT_ID=appIDInfo['clientId']
        APPID_OAUTH_SERVER_URL=appIDInfo['oauthServerUrl']
        APPID_SECRET=appIDInfo['secret']
@@ -122,10 +123,8 @@ if (DB2_URI and APPID_CLIENT_ID and APPID_OAUTH_SERVER_URL and APPID_SECRET and 
 
     # General setup based on the obtained configuration
     # Configure database access
-    if "50000" in DB2_URI:
-        app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI
-    else:
-        app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI+"Security=SSL;"
+    
+    app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
     app.config['SQLALCHEMY_ECHO']=False
 
