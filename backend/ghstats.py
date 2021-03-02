@@ -82,9 +82,9 @@ if 'VCAP_SERVICES' in os.environ:
     vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
 
     # Db2, either Db2 Warehouse or Db2
-    if 'dashDB' in vcapEnv:
+    if 'dashDB' or 'dashdb' in vcapEnv:
         DB2_URI=vcapEnv['dashDB'][0]['credentials']['uri']
-    elif 'dashDB For Transactions' in vcapEnv:
+    elif 'dashDB For Transactions' or 'dashdb-for-transactions' in vcapEnv:
         DB2_URI=vcapEnv['dashDB For Transactions'][0]['credentials']['uri']
     
     # AppID
@@ -168,7 +168,7 @@ if (DB2_URI and APPID_CLIENT_ID and APPID_OAUTH_SERVER_URL and APPID_SECRET and 
     # initial configuration
     #
 else:
-    # We are not initialized yet
+    # We are not initialized yet, but try to provide some minimal app to the user
     #
     # Some heavy lifting required...
     #
