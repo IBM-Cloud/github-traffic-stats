@@ -1,21 +1,13 @@
-FROM ubuntu:18.04
-RUN apt-get update && \
-  apt-get install -y software-properties-common && \
-  add-apt-repository ppa:jonathonf/python-3.6
-
-RUN apt-get install -y build-essential python3.6 python3.6-dev python3-pip
-
-
-# We copy just the requirements.txt first to leverage Docker cache
-COPY ./requirements.txt /app/requirements.txt
+FROM python:3
 
 WORKDIR /app
+COPY /requirements.txt requirements.txt
 
-RUN pip3 install -r requirements.txt
 
-COPY . .
+RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 5000
-ENTRYPOINT [ "python3" ]
+COPY . /app
 
-CMD [ "ghstats.py" ]
+EXPOSE 8080
+ENTRYPOINT [ "python"]
+CMD ["ghstats.py" ]

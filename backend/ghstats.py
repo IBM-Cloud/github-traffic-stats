@@ -9,24 +9,35 @@
 # For the database schema see the file database.sql
 #
 # Written by Henrik Loeser (data-henrik), hloeser@de.ibm.com
-# (C) 2018 by IBM
+# (C) 2018-2021 by IBM
 
-import flask, os, json, datetime, decimal, re, requests
+import flask, os, json, datetime, decimal, re, requests, time
+from functools import wraps
+
+# for loading .env
+from dotenv import load_dotenv
+
+# Needed for decoding / encoding credentials
 from base64 import b64encode
-import github # githubpy module
+
+# githubpy module to access GitHub
+import github
+
+# everything Flask for this app
 from flask import (Flask, jsonify, make_response, redirect,request,
 		   render_template, url_for, Response, stream_with_context)
-from flask_httpauth import HTTPBasicAuth
 from flask_pyoidc.flask_pyoidc import OIDCAuthentication
-from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata
-from sqlalchemy import Column, Table, Integer, String, select, ForeignKey
-from sqlalchemy.orm import relationship, backref
-from flask_sqlalchemy import SQLAlchemy
-from flask_talisman import Talisman
-# Authentication for DDE, based on token
-from itsdangerous import (TimedJSONWebSignatureSerializer
-                          as Serializer, BadSignature, SignatureExpired)
+from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata, ProviderMetadata
 
+# Database access using SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.pool import NullPool
+
+# Advanced security
+from flask_talisman import Talisman, ALLOW_FROM
+
+# load environment
+load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -38,8 +49,11 @@ csp = {
         '\'self\'',
         '\'unsafe-inline\'',
         'use.fontawesome.com',
+        'cdn.jsdelivr.net',
+        'cdn.datatables.net',
         '*.ibm.com'
     ],
+    'img-src': '*',
     'script-src': [
         '\'self\'',
         '\'unsafe-inline\'',
@@ -50,73 +64,137 @@ csp = {
         '*.ibm.com'
     ]
 }
-Talisman(app, content_security_policy=csp)
+#talisman=Talisman(app, content_security_policy=csp)
 
-# Check if we are in a Cloud Foundry environment, i.e., on IBM Cloud
-# If we are on IBM Cloud, obtain the credentials from the environment.
-# Else, read them from file.
-# Thereafter, set up the services and module with the obtained credentials.
+# Read the configuration and possible environment variables
+# There are from local .env, provided through K8s secrets or
+# through service bindings.
+DB2_URI=None
+APPID_CLIENT_ID=None
+APPID_OAUTH_SERVER_URL=None
+APPID_SECRET=None
+FULL_HOSTNAME=None
+EVENT_TOKEN=None
+ALL_CONFIGURED=False
+
+
+# First, check for any service bindings
 if 'VCAP_SERVICES' in os.environ:
-   vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
+    vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
 
-   # Obtain configuration for Db2 Warehouse database
-   dbInfo=vcapEnv['dashDB'][0]['credentials']
+    # Db2, either Db2 Warehouse or Db2 (lite plan)
+    if 'dashdb' in vcapEnv:
+        DB2_URI=vcapEnv['dashdb'][0]['credentials']['uri']
+    elif 'dashdb-for-transactions' in vcapEnv:
+        DB2_URI=vcapEnv['dashdb-for-transactions'][0]['credentials']['uri']
+    
+    # AppID
+    if 'appid' in vcapEnv:
+       appIDInfo = vcapEnv['appid'][0]['credentials']
+       APPID_CLIENT_ID=appIDInfo['clientId']
+       APPID_OAUTH_SERVER_URL=appIDInfo['oauthServerUrl']
+       APPID_SECRET=appIDInfo['secret']
+    
+# Now, check for any overwritten environment settings. 
+# Obtain configuration for Db2 Warehouse database
+DB2_URI=os.getenv("DB2_URI", DB2_URI)
 
-   # Obtain configuration for
-   appIDInfo = vcapEnv['AppID'][0]['credentials']
+# AppID settings
+APPID_CLIENT_ID=os.getenv("APPID_CLIENT_ID", APPID_CLIENT_ID)
+APPID_OAUTH_SERVER_URL=os.getenv("APPID_OAUTH_SERVER_URL", APPID_OAUTH_SERVER_URL)
+APPID_SECRET=os.getenv("APPID_SECRET", APPID_SECRET)
 
-   # Configure access to DDE service
-   DDE=vcapEnv['dynamic-dashboard-embedded'][0]['credentials']
+# Event settings
+EVENT_TOKEN=os.getenv("EVENT_TOKEN","CE_rulez")
 
-   # Update Flask configuration
-   app.config.update({'SERVER_NAME': json.loads(os.environ['VCAP_APPLICATION'])['uris'][0],
-                      'SECRET_KEY': 'my_not_so_dirty_secret_key',
-                      'PREFERRED_URL_SCHEME': 'https',
-                      'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
-                      'DEBUG': False})
+# Full hostname
+FULL_HOSTNAME=os.getenv("FULL_HOSTNAME")
 
-# we are local, so load info from a file
+# is everything configured?
+if (DB2_URI and APPID_CLIENT_ID and APPID_OAUTH_SERVER_URL and APPID_SECRET and FULL_HOSTNAME):
+    ALL_CONFIGURED=True
+
+    # Update Flask configuration
+    #'SERVER_NAME': os.getenv("HOSTNAME"),
+    app.config.update({'OIDC_REDIRECT_URI': os.getenv('FULL_HOSTNAME')+'/redirect_uri',
+                       'SECRET_KEY': 'my_not_so_dirty_secret_key',
+                       'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
+                       'DEBUG': os.getenv("FLASK_DEBUG", False)})
+
+    # General setup based on the obtained configuration
+    # Configure database access
+    
+    app.config['SQLALCHEMY_DATABASE_URI']=DB2_URI
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
+    app.config['SQLALCHEMY_ECHO']=False
+
+    # Configure access to App ID service for the OpenID Connect client
+    appID_clientinfo=ClientMetadata(client_id=APPID_CLIENT_ID,client_secret=APPID_SECRET)
+    appID_config = ProviderConfiguration(issuer=APPID_OAUTH_SERVER_URL,client_metadata=appID_clientinfo)
+
+    # Initialize OpenID Connect client
+    auth=OIDCAuthentication({'default': appID_config}, app)
+
+    # Initialize SQLAlchemy for our database
+    db = SQLAlchemy(app, session_options={'autocommit': True})
+
+
+    # Three (3) decorators that wrap the auth decorators. See the comments
+    # in the ELSE for the background
+    def security_decorator_auth(f):        
+        @wraps(f)
+        @auth.oidc_auth('default')
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
+
+    def security_decorator_logout(f):        
+        @wraps(f)
+        @auth.oidc_logout
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
+
+    def security_decorator_error(f):        
+        @wraps(f)
+        @auth.error_view
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
+
+
+    # end of skipped
+    # initial configuration
+    #
 else:
-   # Credentials are read from a file
-   with open('config.json') as confFile:
-       # load JSON data from file
-       appConfig=json.load(confFile)
-       # Extract AppID configuration
-       appIDInfo=appConfig['AppID']
-       # Config for Db2
-       dbInfo=appConfig['dashDB']
-       #Config for DDE
-       DDE=appConfig['dynamic-dashboard-embedded']
-   # See http://flask.pocoo.org/docs/0.12/config/
-   app.config.update({'SERVER_NAME': '0.0.0.0:5000',
-                      'SECRET_KEY': 'my_secret_key',
-                      'PREFERRED_URL_SCHEME': 'http',
-                      'PERMANENT_SESSION_LIFETIME': 2592000, # session time in seconds (30 days)
-                      'DEBUG': True})
+    # We are not initialized yet, but try to provide some minimal app to the user
+    #
+    # Some heavy lifting required...
+    #
+    # Define 3 pseudo decorators that just do nothing.
+    # This way we can have an up and running app if no services are
+    # bound to / passed into the app yet. This allows to have a 
+    # successful deployment even without all the tutorial steps
+    # performed.
+    def security_decorator_auth(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
+
+    def security_decorator_logout(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
+
+    def security_decorator_error(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            return f(*args, **kwargs)
+        return decorated_function
 
 
-# General setup based on the obtained configuration
-# Configure database access
-if dbInfo['port']==50001:
-    # if we are on the SSL port, add additional parameter for the driver
-    app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']+"Security=SSL;"
-else:
-    app.config['SQLALCHEMY_DATABASE_URI']=dbInfo['uri']
-
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
-app.config['SQLALCHEMY_ECHO']=False
-
-# Configure access to App ID service for the OpenID Connect client
-appID_clientinfo=ClientMetadata(client_id=appIDInfo['clientId'],client_secret=appIDInfo['secret'])
-appID_config = ProviderConfiguration(issuer=appIDInfo['oauthServerUrl'],client_metadata=appID_clientinfo)
-
-# Initialize OpenID Connect client
-auth=OIDCAuthentication({'default': appID_config}, app)
-# Initialize BasicAuth, needed for token access to data
-basicauth = HTTPBasicAuth()
-
-# Initialize SQLAlchemy for our database
-db = SQLAlchemy(app, session_options={'autocommit': True})
 
 # Encoder to handle some raw data correctly
 def alchemyencoder(obj):
@@ -135,7 +213,8 @@ def setuserrole(email=None):
             # there should be exactly one matching row
             flask.session['userrole']=row[0]
     except:
-        pass
+        app.logger.error("Db2 error")
+        raise
     return flask.session['userrole']
 
 # Check for userrole
@@ -168,7 +247,7 @@ def isRepoViewer():
 # Index page, unprotected to display some general information
 @app.route('/', methods=['GET'])
 def index():
-    return render_template('index.html', startpage=True)
+    return render_template('index.html', startpage=True, configured=ALL_CONFIGURED)
 
 
 # have "unprotected" page with instructions
@@ -183,7 +262,7 @@ def initializeApp():
 
 # Show page for entering user information for first system user and tenant
 @app.route('/admin/firststep', methods=['GET'])
-@auth.oidc_auth('default')
+@security_decorator_auth
 def firststep():
     return render_template('firststep.html')
 
@@ -193,12 +272,11 @@ def firststep():
 # tenant.
 # Called from firststep
 @app.route('/admin/secondstep', methods=['POST'])
-@auth.oidc_auth('default')
+@security_decorator_auth
 def secondstep():
     username=request.form['username']
     ghuser=request.form['ghuser']
     ghtoken=request.form['ghtoken']
-    dbstmtstring=None
     sqlfile = open('database.sql', 'r')  # read the file line by line into array
     sqlcode = ''
     for line in sqlfile:
@@ -231,7 +309,7 @@ def secondstep():
 
 # Official login URI, redirects to repo stats after processing
 @app.route('/login')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def login():
     if setuserrole(flask.session['id_token']['email'])>0:
         return redirect(url_for('repostatistics'))
@@ -241,20 +319,20 @@ def login():
 # Show a user profile
 @app.route('/user')
 @app.route('/user/profile')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def profile():
     return render_template('profile.html',id=flask.session['id_token'], role=flask.session['userrole'])
 
 # End the session by logging off
 @app.route('/logout')
-@auth.oidc_logout
+@security_decorator_logout
 def logout():
     flask.session['userrole']=None
     return redirect(url_for('index'))
 
 # Form to enter new tenant data
 @app.route('/admin/newtenant')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def newtenant():
     if isAdministrator():
         return render_template('newuser.html')
@@ -264,7 +342,7 @@ def newtenant():
 
 # Show table with system logs
 @app.route('/admin/systemlog')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def systemlog():
     if isSysMaintainer() or isAdministrator():
         return render_template('systemlog.html',)
@@ -273,7 +351,7 @@ def systemlog():
 
 # return page with the repository stats
 @app.route('/repos/stats')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def repostatistics():
     if isTenant() or isTenantViewer() or isRepoViewer():
         # IDEA: expand to limit number of selected days, e.g., past 30 days
@@ -283,7 +361,7 @@ def repostatistics():
 
 # return page with the repository stats
 @app.route('/repos/statsweekly')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def repostatistics_weekly():
     if isTenant() or isTenantViewer() or isRepoViewer():
         # IDEA: expand to limit number of selected days, e.g., past 30 days
@@ -296,7 +374,7 @@ def repostatistics_weekly():
 # Show list of managed repositories
 @app.route('/repos')
 @app.route('/repos/list')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def listrepos():
     if isTenant():
         return render_template('repolist.html')
@@ -305,7 +383,7 @@ def listrepos():
 
 # Process the request to add a new repository
 @app.route('/api/newrepo', methods=['POST'])
-@auth.oidc_auth('default')
+@security_decorator_auth
 def newrepo():
     if isTenant():
         # Access form data from app
@@ -319,7 +397,6 @@ def newrepo():
         trans = connection.begin()
         try:
             tid=None
-            aid=None
             rid=None
             orgid=None
             ghstmt="""select atrr.tid, au.aid,t.ghuser,t.ghtoken
@@ -332,7 +409,6 @@ def newrepo():
             githubinfo = connection.execute(ghstmt,flask.session['id_token']['email'])
             for row in githubinfo:
                 tid=row['tid']
-                aid=row['aid']
             orgidinfo = connection.execute("select oid from ghorgusers where username=?",orgname)
             for row in orgidinfo:
                 orgid=row['oid']
@@ -356,7 +432,7 @@ def newrepo():
 
 # Process the request to delete a repository
 @app.route('/api/deleterepo', methods=['POST'])
-@auth.oidc_auth('default')
+@security_decorator_auth
 def deleterepo():
     if isTenant():
         # Access form data from app
@@ -373,14 +449,14 @@ def deleterepo():
         trans = connection.begin()
         try:
             # delete the repo record
-            result = connection.execute("delete from repos where rid=?",repoid)
+            connection.execute("delete from repos where rid=?",repoid)
             # delete the relationship information
-            result = connection.execute("delete from tenantrepos where rid=?",repoid)
+            connection.execute("delete from tenantrepos where rid=?",repoid)
             # delete the role information
-            result = connection.execute("delete from admintenantreporoles where rid=?",repoid)
+            connection.execute("delete from admintenantreporoles where rid=?",repoid)
             # delete related traffic data
             # IDEA: This app could be extended to ask whether to keep this data.
-            result = connection.execute("delete from repotraffic where rid=?",repoid)
+            connection.execute("delete from repotraffic where rid=?",repoid)
 
             trans.commit()
         except:
@@ -390,127 +466,9 @@ def deleterepo():
     else:
         return jsonify(message="Error: no repository deleted") # should go to error or info page
 
-
-# Initialize session to display a canned DDE dashboard
-@app.route('/api/v1/dashboard_display_session', methods=['POST'])
-@auth.oidc_auth('default')
-def dashboard_display_session():
-    # For DDE-based data access we are going to use token-based Basic Auth
-    # In the following, encode the session user's email into a time-limited
-    # access token.
-
-    # 1 hour expiration time for data access
-    expiration=3600
-    # New token generator, initialize with expiration time
-    s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
-    # generate a new token based on the email address
-    token=s.dumps({'id': flask.session['id_token']['email']})
-    # encode it for Basic Auth usage
-    token_string=token.decode('ascii')+":Iamatoken"
-    enctoken=b64encode(token_string.encode()).decode("ascii")
-
-    # Load the dashboard specification from JSON file - this could be stored in
-    # the database, too.
-    with open('dashboard.json') as dashboardFile:
-        # load JSON data from file, this is the dashboard spec
-        dboard=json.load(dashboardFile)
-
-    # This looks ugly and, yes,  it is... :)
-    # Replace the value for Basic Auth within the dashboard specification
-    [item for item in dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['property']
-        if item['name']=='headers'][0]['value'][0]['value']="Basic "+enctoken
-    # Replace the value for sourceUrl within the dashboard specification
-    dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['sourceUrl']=request.url_root+"api/v1/data/repositorystats.csv"
-
-    # For debugging - obtain the changed value for Authorization and print it:
-    # vals=[item for item in dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['property']
-    #         if item['name']=='headers'][0]['value'][0]['value']
-    # print(vals)
-    # dboard['dataSources']['sources'][0]['module']['source']['srcUrl']['sourceUrl']
-
-
-    # Configure result for DDE initialization
-    body={ "expiresIn": expiration, "webDomain" : request.url_root }
-    ddeUri=DDE['api_endpoint_url']+'v1/session'
-    # Obtain new session code from DDE
-    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
-    # All data in place, return it back to the client
-    return jsonify(sessionData=json.loads(res.text), dashboard=dboard, ddeAPIUrl=DDE['api_endpoint_url']), 201
-
-
-# Initialize session to display a canned DDE dashboard
-@app.route('/api/v1/dashboard_edit_session', methods=['POST'])
-@auth.oidc_auth('default')
-def dashboard_edit_session():
-    # For DDE-based data access we are going to use token-based Basic Auth
-    # In the following, encode the session user's email into a time-limited
-    # access token.
-    expiration=3600
-    s = Serializer(app.config['SECRET_KEY'], expires_in = expiration)
-    token=s.dumps({'id': flask.session['id_token']['email']})
-    token_string=token.decode('ascii')+":Iamatoken"
-    enctoken=b64encode(token_string.encode()).decode("ascii")
-
-    # Define a CSV data source for DDEcsvStats
-    # The sourceUrl and the authentication are dynamically generated
-    DDEcsvStats = {
-        "xsd": "https://ibm.com/daas/module/1.0/module.xsd",
-        "source": { "id": "Repostats",
-                    "srcUrl": { "sourceUrl": request.url_root+"api/v1/data/repositorystats.csv", "mimeType": "text/csv",
-                                "property": [
-                                        { "name": "separator", "value": ", " },
-                                        { "name": "ColumnNamesLine", "value": "true" },
-                                        { "name": "headers", "value": [{"name": "Authorization", "value": "Basic "+enctoken}]}
-                                    ]
-                                }
-                  },
-        "table": { "name": "repositorystats", "description": "Traffic data for repositories",
-              "column": [
-                    { "name": "RID", "description": "repository ID", "datatype": "INTEGER", "nullable": "false", "label": "Repository ID", "usage": "identifier", "regularAggregate": "countDistinct"},
-                    { "name": "ORGNAME", "description": "Organization or user", "datatype": "VARCHAR(255)", "nullable": "false", "label": "organization or user", "usage": "identifier", "regularAggregate": "countDistinct" },
-                    { "name": "REPONAME", "description": "repository name","datatype": "VARCHAR(255)", "nullable": "false", "label": "repository name", "usage": "fact", "regularAggregate": "total" },
-                    { "name": "TDATE", "description": "traffic date", "datatype": "DATE", "nullable": "false", "label": "traffic date", "usage": "identifier", "regularAggregate": "countDistinct", "taxonomyFamily": "cDate" },
-                    { "name": "VIEWCOUNT", "datatype": "INTEGER", "nullable": "false", "label": "count of views", "usage": "fact", "regularAggregate": "total" },
-                    { "name": "VUNIQUES", "datatype": "INTEGER", "nullable": "false", "label": "unique views", "usage": "fact", "regularAggregate": "total" },
-                    { "name": "CLONECOUNT", "datatype": "INTEGER", "nullable": "false", "label": "count of clones", "usage": "fact", "regularAggregate": "total" },
-                    { "name": "CUNIQUES", "datatype": "INTEGER", "nullable": "false", "label": "unique counts", "usage": "fact", "regularAggregate": "total" } ]
-                },
-        "label": "Repository Traffic Data",
-        "identifier": "Repostats" }
-
-    # Setup request to DDE for new session code
-    body={ "expiresIn": expiration, "webDomain" : request.url_root }
-    ddeUri=DDE['api_endpoint_url']+'v1/session'
-    # Obtain new session code from DDE
-    res = requests.post(ddeUri, data=json.dumps(body) , auth=(DDE['client_id'], DDE['client_secret']), headers={'Content-Type': 'application/json'})
-    # Ok, return the session code and CSV data source information as JSON
-    return jsonify(sessionData=json.loads(res.text), csvStats=DDEcsvStats, ddeAPIUrl=DDE['api_endpoint_url']), 201
-
-
-
-# Display a canned DDE dashboard
-@app.route('/repos/dashboard')
-@auth.oidc_auth('default')
-def dashboard():
-    if isTenant() or isTenantViewer() or isRepoViewer():
-        return render_template('dashboard.html')
-    else:
-        return render_template('notavailable.html', message="You are not authorized.")
-
-# Create a new DDE dashboard
-@app.route('/repos/newdashboard')
-@auth.oidc_auth('default')
-def new_dashboard():
-    if isTenant():
-        return render_template('dashboardnew.html')
-    else:
-        return render_template('notavailable.html', message="You are not authorized.")
-
-
-
 # return the currently active user as csv file
 @app.route('/data/user.csv')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_user():
     def generate(email):
         yield "user" + '\n'
@@ -550,7 +508,7 @@ statsWorkWeek="""select r.rid,orgname,reponame,varchar_format(tdate,'YYYY-IW') a
 
 # return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostats.txt')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_repostats_txt():
     def generate():
         yield '{ "data": [\n'
@@ -568,7 +526,7 @@ def generate_data_repostats_txt():
 
 # return the repository statistics for the web page, dynamically loaded
 @app.route('/data/repostatsWorkWeek.txt')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_repostatsWorkWeek_txt():
     def generate():
         yield '{ "data": [\n'
@@ -587,7 +545,7 @@ def generate_data_repostatsWorkWeek_txt():
 
 # return the system logs for the web page, dynamically loaded
 @app.route('/data/systemlogs.txt')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_systemlogs_txt():
     if isAdministrator() or isSysMaintainer():
         def generate():
@@ -607,7 +565,7 @@ def generate_data_systemlogs_txt():
 
 # return the repository statistics for the current user as csv file
 @app.route('/data/repostats.csv')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_repostats():
     def generate():
         yield "RID,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
@@ -617,41 +575,9 @@ def generate_repostats():
                 yield ','.join(map(str,row)) + '\n'
     return Response(stream_with_context(generate()), mimetype='text/csv')
 
-# Return statistics for use in DDE
-@app.route('/api/v1/data/repositorystats.csv')
-@basicauth.login_required
-def api_generate_repostats():
-    def generate():
-        yield "RID,ORGNAME,REPONAME,TDATE,VIEWCOUNT,VUNIQUES,CLONECOUNT,CUNIQUES\n"
-        result = db.engine.execute(statsFullOrgStmt,flask.g.email)
-        for row in result:
-            yield ','.join(map(str,row)) + '\n'
-    return Response(stream_with_context(generate()), mimetype='text/csv')
-    resp = make_response(render_template('list.html', entries=entries))
-
-
-# Handle password verification our way:
-# Check that the token is valid and ignore the password
-@basicauth.verify_password
-def verify_password(token, nopassword):
-    # Need the serializer
-    s = Serializer(app.config['SECRET_KEY'])
-    try:
-        # Ok, check for a valid token and extract the data
-        data = s.loads(token)
-    except SignatureExpired:
-        # valid token, but expired
-        return False
-    except BadSignature:
-        # invalid token
-        return False
-    # all well, set the email for use in the csv generator functions
-    flask.g.email = data['id']
-    return True
-
 # Generate list of repositories for web page, dynamically loaded
 @app.route('/data/repositories.txt')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_data_repolist_txt():
     def generate():
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
@@ -668,22 +594,10 @@ def generate_data_repolist_txt():
 
 # Export repositories as CSV file
 @app.route('/data/repositories.csv')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def generate_repolist():
     def generate():
         result = db.engine.execute(repolist_stmt,flask.session['id_token']['email'])
-        yield "RID,ORGNAME,REPONAME\n"
-        for row in result:
-            yield ','.join(map(str,row)) + '\n'
-    return Response(stream_with_context(generate()), mimetype='text/csv')
-
-# Export repositories as CSV file
-# CURRENTLY NOT IN USE, but could be used by DDE dashboard
-@app.route('/api/v1/data/repositories.csv')
-@basicauth.login_required
-def api_generate_repolist():
-    def generate():
-        result = db.engine.execute(repolist_stmt,flask.g.email)
         yield "RID,ORGNAME,REPONAME\n"
         for row in result:
             yield ','.join(map(str,row)) + '\n'
@@ -698,16 +612,186 @@ def static_file(path):
 @app.route('/admin')
 @app.route('/repos')
 @app.route('/data')
-@auth.oidc_auth('default')
+@security_decorator_auth
 def not_available():
     return render_template('notavailable.html')
 
 # error function for auth module
-@auth.error_view
+@security_decorator_error
 def error(error=None, error_description=None):
     return jsonify({'error': error, 'message': error_description})
 
 
+
+# New section with previously Cloud Functions / serverless functionality
+# Collect statistics from GitHub
+#
+#######
+# SQL statements
+#
+# fetch all users
+allTenantsStatement="select tid, ghuser, ghtoken from tenants"
+# fetch all repos for a given userID
+allReposStatement="select r.rid, ghu.username, r.rname from tenantrepos tr,repos r, ghorgusers ghu where tr.rid=r.rid and r.oid=ghu.oid and tr.tid=?"
+
+# merge the view traffic data
+mergeViews1="merge into repotraffic rt using (values"
+mergeViews2=""") as nv(rid,viewdate,viewcount,uniques) on rt.rid=nv.rid and rt.tdate=nv.viewdate
+            when matched and nv.viewcount>rt.viewcount then update set viewcount=nv.viewcount, vuniques=coalesce(nv.uniques,0)
+            when not matched then insert (rid,tdate,viewcount, vuniques) values(nv.rid,nv.viewdate,coalesce(nv.viewcount,0),coalesce(nv.uniques,0))
+            else ignore"""
+
+# merge the clone traffic data
+mergeClones1="merge into repotraffic rt using (values"
+mergeClones2=""") as nc(rid,clonedate,clonecount,uniques) on rt.rid=nc.rid and rt.tdate=nc.clonedate
+             when matched and nc.clonecount>rt.clonecount then update set clonecount=nc.clonecount, cuniques=coalesce(nc.uniques,0)
+             when not matched then insert (rid,tdate,clonecount,cuniques) values(nc.rid,nc.clonedate,coalesce(nc.clonecount,0),coalesce(nc.uniques,0))
+             else ignore"""
+
+# new syslog record
+insertLogEntry="insert into systemlog values(?,?,?,?)"
+
+# Merge view data into the traffic table
+def mergeViewData(viewStats, rid, conn):
+    # convert traffic data into SQL values
+    data=""
+    for vday in viewStats['views']:
+        data+="("+str(rid)+",'"+vday['timestamp'][:10]+"',"+str(vday['count'])+","+str(vday['uniques'])+"),"
+    mergeStatement=mergeViews1+data[:-1]+mergeViews2
+    conn.execute(mergeStatement)
+
+
+# Merge clone data into the traffic table
+def mergeCloneData(cloneStats, rid, conn):
+    # convert traffic data into SQL values
+    data=""
+    for cday in cloneStats['clones']:
+        data+="("+str(rid)+",'"+cday['timestamp'][:10]+"',"+str(cday['count'])+","+str(cday['uniques'])+"),"
+    mergeStatement=mergeClones1+data[:-1]+mergeClones2
+    # execute MERGE statement
+    conn.execute(mergeStatement)
+
+
+# Overall flow:
+# - loop over users
+#   - log in to GitHub as that current user
+#   - retrieve repos for that current user, loop the repos
+#     - for each repo fetch stats
+#     - merge traffic data into table
+#  update last run info
+
+def collectStatistics(logPrefix="collectStats"):
+    repoCount=0
+    processedRepos=0
+    logtext=logPrefix+" ("
+    errortext=""
+    connection = db.engine.connect()
+    trans = connection.begin()
+    try:
+        # go over all system users
+        allTenants=connection.execute(allTenantsStatement)
+        for row in allTenants:
+
+            # prepare statement for logging
+            #logStmt = ibm_db.prepare(conn, insertLogEntry)
+        
+            # go over all repos managed by that user and fetch traffic data
+            # first, login to GitHub as that user
+            tid=row["tid"]
+            
+            gh = github.GitHub(username=row["ghuser"],  access_token=row["ghtoken"])
+
+            userRepoCount=0
+            # prepare and execute statement to fetch related repositories
+            repos=connection.execute(allReposStatement,tid)
+            for row in repos:
+                repoCount=repoCount+1
+                # fetch view and clone traffic
+                try:
+                    viewStats=gh.repos(row["username"], row["rname"]).traffic.views.get()
+                    cloneStats=gh.repos(row["username"], row["rname"]).traffic.clones.get()
+                    if viewStats['views']:
+                        mergeViewData(viewStats,row["rid"], connection)
+                    if cloneStats['clones']:
+                        mergeCloneData(cloneStats,row["rid"], connection)
+                    userRepoCount=userRepoCount+1
+                    # For debugging:
+                    # print repo["USERNAME"]+" "+ repo["RNAME"]
+
+                    # update global repo counter
+                    processedRepos=processedRepos+1
+                    # fetch next repository
+                except:
+                    errortext=errortext+str(row["rid"])+" "
+                
+            # insert log entry
+            ts = time.gmtime()
+            logtext=logtext+str(processedRepos)+"/"+str(repoCount)+")"
+            if errortext !="":
+                logtext=logtext+", repo errors: "+errortext
+            connection.execute(insertLogEntry,(tid,time.strftime("%Y-%m-%d %H:%M:%S", ts),userRepoCount,logtext))
+        trans.commit()
+    except:
+        trans.rollback()
+        raise
+    return {"repoCount": repoCount}
+
+@app.route('/admin/collectStats')
+@security_decorator_auth
+def collectStats():
+    res=collectStatistics(logPrefix='collectStats')
+    return render_template('collect.html',repoCount=res["repoCount"])
+
+# Ping subscription in Code Engine
+# Check for secret token
+@app.route('/collectStats', methods=['POST'])
+def eventCollectStats():
+    mydata=request.json
+    if mydata['token']==EVENT_TOKEN:
+        res=collectStatistics(logPrefix='CEping')
+        return jsonify(message="success - stats collected", repoCount=res["repoCount"]),200
+    else:
+        return "no success",403
+
+
+# return the repository statistics for the web page, dynamically loaded
+@app.route('/data/repostats.json')
+@security_decorator_auth
+def generate_data_repostats_json():
+    values=[]
+    datasets=[]
+    if isTenant() or isTenantViewer() or isRepoViewer():
+        fetchStmt="""select r.rid, r.tdate, r.viewcount
+                     from repotraffic r, v_adminuserrepos v
+                     where r.rid=v.rid
+                     and v.email=?
+                     and r.tdate between (current date - 1 month) and (current date)
+                     order by r.rid, r.tdate asc"""
+
+        repoStmt="""select r.rid, r.rname from repos r, v_adminuserrepos v
+                    where r.rid=v.rid
+                    and v.email=?
+                    order by rid asc"""
+        result = db.engine.execute(fetchStmt,flask.session['id_token']['email'])
+        for row in result:
+            values.append({'x':row['tdate'].isoformat(),'y':row['viewcount'], 'id':row['rid']})
+
+        repos = db.engine.execute(repoStmt,flask.session['id_token']['email']).fetchall()
+        for row in repos:
+            rdict=[d for d in values if d['id'] == row['rid']]
+            datasets.append({'data': rdict, 'label': row['rname']})
+
+    return jsonify(labels=[], data=datasets)
+
+
+@app.route('/repos/linechart')
+@security_decorator_auth
+def linechart():
+    return render_template('chart.html')
+
+
+# Start the actual app
+# Get the PORT from environment
 port = os.getenv('PORT', '5000')
 if __name__ == "__main__":
-	app.run(host='0.0.0.0', port=int(port))
+	app.run(host='0.0.0.0',port=int(port))

@@ -8,9 +8,15 @@
 <div id="main" class="container">
     <h2 class="title is-1">Welcome to GitHub Traffic Analytics</h2>
     <div class="box">
+    {% if configured %}
     <p>
       Please <a href="/login">login</a> to continue to access to the traffic statistics.
     </p>
+    {% else %}
+    <p>
+      The app has NOT yet been configured succcessfully.
+    </p>
+    {% endif %}
 
 </div>
 </div>

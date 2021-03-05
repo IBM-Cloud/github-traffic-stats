@@ -1,9 +1,0 @@
-applications:
-- name: github-traffic-stats
-  memory: 128M
-  command: python ghstats.py
-  random-route: true
-  services:
-  - ghstatsDB
-  - ghstatsAppID
-  - ghstatsDDE

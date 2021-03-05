@@ -59,3 +59,5 @@ typings/
 
 # config files
 config.json
+
+ghstatsAPIKEY.json
