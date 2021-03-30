@@ -79,8 +79,9 @@ ALL_CONFIGURED=False
 
 
 # First, check for any service bindings
-if 'VCAP_SERVICES' in os.environ:
-    vcapEnv=json.loads(os.environ['VCAP_SERVICES'])
+# CE_SERVICES instead of Cloud Foundry VCAP_SERVICES
+if 'CE_SERVICES' in os.environ:
+    vcapEnv=json.loads(os.environ['CE_SERVICES'])
 
     # Db2, either Db2 Warehouse or Db2 (lite plan)
     if 'dashdb' in vcapEnv:
