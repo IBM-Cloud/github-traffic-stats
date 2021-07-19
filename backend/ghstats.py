@@ -109,8 +109,14 @@ APPID_SECRET=os.getenv("APPID_SECRET", APPID_SECRET)
 EVENT_TOKEN=os.getenv("EVENT_TOKEN","CE_rulez")
 
 # Full hostname
-FULL_HOSTNAME=os.getenv("FULL_HOSTNAME")
-
+# Code Engine started to inject new environment variables. CE_SUBDOMAIN
+# is only set for new apps after that change. Old apps continue to set
+# FULL_HOSTNAME.
+if 'CE_SUBDOMAIN' in os.environ:
+    FULL_HOSTNAME='https://'+os.getenv("CE_APP")+'.'+os.getenv("CE_SUBDOMAIN")+'.'+os.getenv("CE_DOMAIN")
+else:
+    FULL_HOSTNAME=os.getenv("FULL_HOSTNAME")
+    
 # is everything configured?
 if (DB2_URI and APPID_CLIENT_ID and APPID_OAUTH_SERVER_URL and APPID_SECRET and FULL_HOSTNAME):
     ALL_CONFIGURED=True
