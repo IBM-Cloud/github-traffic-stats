@@ -52,5 +52,5 @@ RUN apt-get update && \
 
 # copy in the rest of the app
 COPY ./ ./
-ENTRYPOINT [ "python" ]
-CMD ["ghstats.py"]
+#ENTRYPOINT [ "python" ]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080","ghstats:app"]
