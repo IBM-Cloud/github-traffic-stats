@@ -4,6 +4,7 @@ Flask==1.1.1
 requests==2.20.0
 Flask_pyoidc==3.7.0
 githubpy
+gunicorn
 python-dotenv==0.15.0
 SQLAlchemy==1.3.22
 ibm-db-sa==0.3.6
