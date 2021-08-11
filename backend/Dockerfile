@@ -9,5 +9,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app
 
 EXPOSE 8080
-ENTRYPOINT [ "python"]
-CMD ["ghstats.py" ]
+# start the webserver
+ENTRYPOINT ["gunicorn", "--bind", "0.0.0.0:8080","ghstats:app"]
