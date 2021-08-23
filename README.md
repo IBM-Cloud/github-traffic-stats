@@ -8,7 +8,7 @@ The [original solution was based on Cloud Foundry for the web app and Cloud Func
 Flow:
 1. User accesses the Python (web) app running in IBM Cloud Code Engine. This is to set up the managed GitHub repositories or to access the collected traffic data.
 2. The app interacts with the IBM AppID service for authentication and user management and Db2 as database for user and GitHub traffic data.
-3. A Code Engine ping subscription based contacts the Python app to signal a time event.
+3. A Code Engine cron subscription based contacts the Python app to signal a time event.
 4. Based on the signaled event (3) or directed by an administrator (user), the Python app retrieves GitHub traffic data.
 
 
