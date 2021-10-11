@@ -84,10 +84,27 @@ if 'CE_SERVICES' in os.environ:
     vcapEnv=json.loads(os.environ['CE_SERVICES'])
 
     # Db2, either Db2 Warehouse or Db2 (lite plan)
+    record=None
     if 'dashdb' in vcapEnv:
-        DB2_URI=vcapEnv['dashdb'][0]['credentials']['uri']
+        record=vcapEnv['dashdb'][0]
     elif 'dashdb-for-transactions' in vcapEnv:
-        DB2_URI=vcapEnv['dashdb-for-transactions'][0]['credentials']['uri']
+        record=vcapEnv['dashdb-for-transactions'][0]
+    
+    # old VCAP
+    if 'credentials' in record:
+        DB2_URI=record['credentials']['uri']
+    # new VCAP
+    elif 'connection' in record:
+        username=record['db2']['authentication']['username']
+        password=record['db2']['authentication']['password']
+        hostname=record['db2']['hosts'][0]['hostname']
+        port=record['db2']['hosts'][0]['port']
+        database=record['db2']['database']
+        DB2_URI='db2://'+username+':'+password+'@'+hostname+':'+port+'/'+database+';ssl=true'
+    else:
+        # not configured
+        exit
+
     
     # AppID
     if 'appid' in vcapEnv:
@@ -116,7 +133,7 @@ if 'CE_SUBDOMAIN' in os.environ:
     FULL_HOSTNAME='https://'+os.getenv("CE_APP")+'.'+os.getenv("CE_SUBDOMAIN")+'.'+os.getenv("CE_DOMAIN")
 else:
     FULL_HOSTNAME=os.getenv("FULL_HOSTNAME")
-    
+
 # is everything configured?
 if (DB2_URI and APPID_CLIENT_ID and APPID_OAUTH_SERVER_URL and APPID_SECRET and FULL_HOSTNAME):
     ALL_CONFIGURED=True
