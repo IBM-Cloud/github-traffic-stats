@@ -139,7 +139,7 @@ if (DB2_URI and APPID_CLIENT_ID and APPID_OAUTH_SERVER_URL and APPID_SECRET and 
 
     # Update Flask configuration
     #'SERVER_NAME': os.getenv("HOSTNAME"),
-    app.config.update({'OIDC_REDIRECT_URI': os.getenv('FULL_HOSTNAME')+'/redirect_uri',
+    app.config.update({'OIDC_REDIRECT_URI': FULL_HOSTNAME+'/redirect_uri',
                        'SECRET_KEY': 'my_not_so_dirty_secret_key',
                        'PERMANENT_SESSION_LIFETIME': 1800, # session time in second (30 minutes)
                        'DEBUG': os.getenv("FLASK_DEBUG", False)})
