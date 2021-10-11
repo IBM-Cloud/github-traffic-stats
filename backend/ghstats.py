@@ -96,13 +96,15 @@ if 'CE_SERVICES' in os.environ:
         DB2_URI=record['uri']
     # new VCAP
     elif 'connection' in record:
-        username=record['connection']['db2']['authentication']['username']
-        password=record['connection']['db2']['authentication']['password']
-        hostname=record['connection']['db2']['hosts'][0]['hostname']
-        port=record['connection']['db2']['hosts'][0]['port']
-        database=record['connection']['db2']['database']
-        DB2_URI='db2://'+username+':'+password+'@'+hostname+':'+port+'/'+database+';SECURITY=SSL;PROTOCOL=TCPIP;'
-    
+        # need to load creds from a JSON-like string
+        creds=json.loads(record['connection'])
+        username=creds['db2']['authentication']['username']
+        password=creds['db2']['authentication']['password']
+        hostname=creds['db2']['hosts'][0]['hostname']
+        port=creds['db2']['hosts'][0]['port']
+        database=creds['db2']['database']
+        DB2_URI='db2://'+username+':'+password+'@'+hostname+':'+str(port)+'/'+database+';SECURITY=SSL;PROTOCOL=TCPIP;'
+
     # AppID
     if 'appid' in vcapEnv:
        appIDInfo = vcapEnv['appid'][0]['credentials']
