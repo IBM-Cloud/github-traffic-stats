@@ -89,6 +89,7 @@ if 'CE_SERVICES' in os.environ:
         record=vcapEnv['dashdb'][0]['credentials']
     elif 'dashdb-for-transactions' in vcapEnv:
         record=vcapEnv['dashdb-for-transactions'][0]['credentials']
+
     
     # old VCAP
     if 'uri' in record:
@@ -100,11 +101,7 @@ if 'CE_SERVICES' in os.environ:
         hostname=record['connection']['db2']['hosts'][0]['hostname']
         port=record['connection']['db2']['hosts'][0]['port']
         database=record['connection']['db2']['database']
-        DB2_URI='db2://'+username+':'+password+'@'+hostname+':'+port+'/'+database+';ssl=true'
-    else:
-        # not configured
-        exit
-
+        DB2_URI='db2://'+username+':'+password+'@'+hostname+':'+port+'/'+database+';SECURITY=SSL;PROTOCOL=TCPIP;'
     
     # AppID
     if 'appid' in vcapEnv:
