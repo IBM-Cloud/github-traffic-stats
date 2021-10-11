@@ -86,20 +86,20 @@ if 'CE_SERVICES' in os.environ:
     # Db2, either Db2 Warehouse or Db2 (lite plan)
     record=None
     if 'dashdb' in vcapEnv:
-        record=vcapEnv['dashdb'][0]
+        record=vcapEnv['dashdb'][0]['credentials']
     elif 'dashdb-for-transactions' in vcapEnv:
-        record=vcapEnv['dashdb-for-transactions'][0]
+        record=vcapEnv['dashdb-for-transactions'][0]['credentials']
     
     # old VCAP
-    if 'credentials' in record:
-        DB2_URI=record['credentials']['uri']
+    if 'uri' in record:
+        DB2_URI=record['uri']
     # new VCAP
     elif 'connection' in record:
-        username=record['db2']['authentication']['username']
-        password=record['db2']['authentication']['password']
-        hostname=record['db2']['hosts'][0]['hostname']
-        port=record['db2']['hosts'][0]['port']
-        database=record['db2']['database']
+        username=record['connection']['db2']['authentication']['username']
+        password=record['connection']['db2']['authentication']['password']
+        hostname=record['connection']['db2']['hosts'][0]['hostname']
+        port=record['connection']['db2']['hosts'][0]['port']
+        database=record['connection']['db2']['database']
         DB2_URI='db2://'+username+':'+password+'@'+hostname+':'+port+'/'+database+';ssl=true'
     else:
         # not configured
