@@ -20,8 +20,6 @@ from dotenv import load_dotenv
 # Needed for decoding / encoding credentials
 from base64 import b64encode
 
-# githubpy module to access GitHub
-import github
 
 # everything Flask for this app
 from flask import (Flask, jsonify, make_response, redirect,request,
@@ -702,6 +700,13 @@ def mergeCloneData(cloneStats, rid, conn):
 #     - for each repo fetch stats
 #     - merge traffic data into table
 #  update last run info
+def github_traffic(username, access_token, org, repo, traffic_type):
+    url = f"https://api.github.com/repos/{org}/{repo}/traffic/{traffic_type}"
+    headers = { "Accept" : "application/vnd.github.v3+json"}
+    response = requests.get(url, headers=headers, auth=requests.auth.HTTPBasicAuth(username,access_token))
+    return response.json()
+
+
 
 def collectStatistics(logPrefix="collectStats"):
     repoCount=0
@@ -721,8 +726,8 @@ def collectStatistics(logPrefix="collectStats"):
             # go over all repos managed by that user and fetch traffic data
             # first, login to GitHub as that user
             tid=row["tid"]
-            
-            gh = github.GitHub(username=row["ghuser"],  access_token=row["ghtoken"])
+            username=row["ghuser"]
+            access_token=row["ghtoken"]
 
             userRepoCount=0
             # prepare and execute statement to fetch related repositories
@@ -731,8 +736,8 @@ def collectStatistics(logPrefix="collectStats"):
                 repoCount=repoCount+1
                 # fetch view and clone traffic
                 try:
-                    viewStats=gh.repos(row["username"], row["rname"]).traffic.views.get()
-                    cloneStats=gh.repos(row["username"], row["rname"]).traffic.clones.get()
+                    viewStats=github_traffic(username,access_token, org=row["username"], repo=row["rname"],traffic_type="views")
+                    cloneStats=github_traffic(username,access_token, org=row["username"], repo=row["rname"],traffic_type="clones")
                     if viewStats['views']:
                         mergeViewData(viewStats,row["rid"], connection)
                     if cloneStats['clones']:
@@ -818,3 +823,5 @@ def linechart():
 port = os.getenv('PORT', '5000')
 if __name__ == "__main__":
 	app.run(host='0.0.0.0',port=int(port))
+    
+
