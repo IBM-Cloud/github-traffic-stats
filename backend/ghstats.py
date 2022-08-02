@@ -80,7 +80,6 @@ ALL_CONFIGURED=False
 # CE_SERVICES instead of Cloud Foundry VCAP_SERVICES
 if 'CE_SERVICES' in os.environ:
     vcapEnv=json.loads(os.environ['CE_SERVICES'])
-    print(vcapEnv)
 
     # Db2, either Db2 Warehouse or Db2 (lite plan)
     record=None
