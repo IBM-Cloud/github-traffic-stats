@@ -79,9 +79,8 @@ ALL_CONFIGURED=False
 # First, check for any service bindings
 # CE_SERVICES instead of Cloud Foundry VCAP_SERVICES
 if 'CE_SERVICES' in os.environ:
-    # formatting env into a proper json
-    fixjson=json.dumps(os.environ['CE_SERVICES'])
-    vcapEnv=json.loads(fixjson)
+    vcapEnv=json.loads(os.environ['CE_SERVICES'])
+    print(vcapEnv)
 
     # Db2, either Db2 Warehouse or Db2 (lite plan)
     record=None
@@ -97,7 +96,10 @@ if 'CE_SERVICES' in os.environ:
     # new VCAP
     elif 'connection' in record:
         # need to load creds from a JSON-like string
-        creds=json.loads(record['connection'])
+        # formatting env into a proper json
+        fixjson=json.dumps(record['connection'])
+        creds=json.loads(fixjson)
+      #   creds=json.loads(record['connection'])
         username=creds['db2']['authentication']['username']
         password=creds['db2']['authentication']['password']
         hostname=creds['db2']['hosts'][0]['hostname']
