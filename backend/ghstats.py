@@ -9,9 +9,10 @@
 # For the database schema see the file database.sql
 #
 # Written by Henrik Loeser (data-henrik), hloeser@de.ibm.com
-# (C) 2018-2021 by IBM
+# (C) 2018-2022 by IBM
 
-import flask, os, json, datetime, decimal, re, requests, time
+import flask, os, datetime, decimal, re, requests, time
+import json, ast
 from functools import wraps
 
 # for loading .env
@@ -96,9 +97,8 @@ if 'CE_SERVICES' in os.environ:
     elif 'connection' in record:
         # need to load creds from a JSON-like string
         # formatting env into a proper json
-        fixjson=json.dumps(record['connection'])
+        fixjson=json.dumps(ast.literal_eval(record['connection']))
         creds=json.loads(fixjson)
-      #   creds=json.loads(record['connection'])
         username=creds['db2']['authentication']['username']
         password=creds['db2']['authentication']['password']
         hostname=creds['db2']['hosts'][0]['hostname']
