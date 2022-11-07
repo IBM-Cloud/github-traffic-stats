@@ -128,11 +128,16 @@ EVENT_TOKEN=os.getenv("EVENT_TOKEN","CE_rulez")
 # Full hostname
 # Code Engine started to inject new environment variables. CE_SUBDOMAIN
 # is only set for new apps after that change. Old apps continue to set
-# FULL_HOSTNAME.
-if 'CE_SUBDOMAIN' in os.environ:
+# FULL_HOSTNAME, new deployments could set it to overwrite the setting.
+# This might be useful for custom domains.
+if 'FULL_HOSTNAME' in os.environ:
+    FULL_HOSTNAME=os.getenv("FULL_HOSTNAME")
+elif 'CE_SUBDOMAIN' in os.environ:
     FULL_HOSTNAME='https://'+os.getenv("CE_APP")+'.'+os.getenv("CE_SUBDOMAIN")+'.'+os.getenv("CE_DOMAIN")
 else:
-    FULL_HOSTNAME=os.getenv("FULL_HOSTNAME")
+    app.logger.error("Cannot establish full hostname.")
+    raise
+
 
 # is everything configured?
 if (DB2_URI and APPID_CLIENT_ID and APPID_OAUTH_SERVER_URL and APPID_SECRET and FULL_HOSTNAME):
