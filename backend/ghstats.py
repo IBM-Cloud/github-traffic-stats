@@ -77,6 +77,7 @@ EVENT_TOKEN=None
 ALL_CONFIGURED=False
 
 
+print("v1.0 pfq")
 # First, check for any service bindings
 # CE_SERVICES instead of Cloud Foundry VCAP_SERVICES
 if 'CE_SERVICES' in os.environ:
