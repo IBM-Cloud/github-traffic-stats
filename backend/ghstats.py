@@ -777,12 +777,10 @@ def collectStats():
     res=collectStatistics(logPrefix='collectStats')
     return render_template('collect.html',repoCount=res["repoCount"])
 
-print('pfq01')
 # Ping subscription in Code Engine
 # Check for secret token
 @app.route('/collectStats', methods=['POST', 'GET'])
 def eventCollectStats():
-    print('pfq01 /collectStatists')
     mydata=request.json
     if mydata['token']==EVENT_TOKEN:
         res=collectStatistics(logPrefix='CEping')
