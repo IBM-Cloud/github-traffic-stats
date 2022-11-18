@@ -779,7 +779,7 @@ def collectStats():
 
 # Ping subscription in Code Engine
 # Check for secret token
-@app.route('/collectStats', methods=['POST', 'GET'])
+@app.route('/collectStats', methods=['POST'])
 def eventCollectStats():
     mydata=request.json
     if mydata['token']==EVENT_TOKEN:
