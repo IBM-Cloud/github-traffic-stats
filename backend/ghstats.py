@@ -77,7 +77,7 @@ EVENT_TOKEN=None
 ALL_CONFIGURED=False
 
 
-print("v1.0 pfq")
+print("v1.1 pfq")
 # First, check for any service bindings
 # CE_SERVICES instead of Cloud Foundry VCAP_SERVICES
 if 'CE_SERVICES' in os.environ:
@@ -98,6 +98,8 @@ if 'CE_SERVICES' in os.environ:
     elif 'connection' in record:
         # need to load creds from a JSON-like string
         # formatting env into a proper json
+        print(record)
+        print(record['connection'])
         fixjson=json.dumps(ast.literal_eval(record['connection']))
         creds=json.loads(fixjson)
         username=creds['db2']['authentication']['username']
