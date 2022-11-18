@@ -781,6 +781,7 @@ def collectStats():
 # Check for secret token
 @app.route('/collectStats', methods=['POST'])
 def eventCollectStats():
+    print('pfq00 /collectStatists')
     mydata=request.json
     if mydata['token']==EVENT_TOKEN:
         res=collectStatistics(logPrefix='CEping')
