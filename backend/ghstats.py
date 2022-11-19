@@ -12,7 +12,7 @@
 # (C) 2018-2022 by IBM
 
 import flask, os, datetime, decimal, re, requests, time
-import json, ast
+import json
 from functools import wraps
 
 # for loading .env
@@ -97,8 +97,7 @@ if 'CE_SERVICES' in os.environ:
     elif 'connection' in record:
         # need to load creds from a JSON-like string
         # formatting env into a proper json
-        fixjson=json.dumps(ast.literal_eval(record['connection']))
-        creds=json.loads(fixjson)
+        creds=record['connection']
         username=creds['db2']['authentication']['username']
         password=creds['db2']['authentication']['password']
         hostname=creds['db2']['hosts'][0]['hostname']
