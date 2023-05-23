@@ -1,7 +1,7 @@
 flask_talisman==0.8.1
 Flask_SQLAlchemy==2.5.1
 Flask==2.3.2
-requests==2.24.0
+requests==2.31.0
 Flask_pyoidc==3.7.0
 gunicorn
 python-dotenv==0.15.0
