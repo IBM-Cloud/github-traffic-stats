@@ -1,6 +1,6 @@
 flask-talisman==0.8.1
 Flask-SQLAlchemy==2.5.1
-Flask==2.1.2
+Flask==2.2.5
 requests==2.31.0
 Flask-pyoidc==3.10.0
 pydantic==1.10.11
