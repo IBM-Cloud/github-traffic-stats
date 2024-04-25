@@ -3,7 +3,7 @@ Flask-SQLAlchemy==2.5.1
 Flask==2.2.5
 requests==2.31.0
 Flask-pyoidc==3.10.0
-pydantic==1.10.11
+pydantic==1.10.13
 gunicorn==20.1.0
 python-dotenv==0.15.0
 Werkzeug==3.0.1
